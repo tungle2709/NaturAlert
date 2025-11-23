@@ -98,10 +98,10 @@ const App = () => {
       
       setSosLocation(locationId);
       
-      showMessage('✅ Risk data updated successfully');
+      showMessage('✓ Risk data updated successfully');
     } catch (err) {
       setError(err.message);
-      showMessage('⚠️ Failed to fetch risk data: ' + err.message);
+      showMessage('! Failed to fetch risk data: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -137,11 +137,11 @@ const App = () => {
 
   const handleUseCurrentLocation = () => {
     if (!navigator.geolocation) {
-      showMessage('⚠️ Geolocation is not supported by your browser');
+      showMessage('! Geolocation is not supported by your browser');
       return;
     }
 
-    showMessage('📍 Getting your location...');
+    showMessage('> Getting your location...');
     setLocationSearch('Getting your location...');
     
     navigator.geolocation.getCurrentPosition(
@@ -200,7 +200,7 @@ const App = () => {
           
           // Fetch weather data
           await api.getLocationWeather(latitude, longitude);
-          showMessage(`✅ Using your current location: ${locationName}`);
+          showMessage(`✓ Using your current location: ${locationName}`);
           
           const locationId = `${latitude},${longitude}`;
           setLocation(locationId);
@@ -208,7 +208,7 @@ const App = () => {
           // Automatically fetch risk data for current location
           await fetchRiskData(locationId);
         } catch (err) {
-          showMessage('⚠️ Failed to fetch location data: ' + err.message);
+          showMessage('! Failed to fetch location data: ' + err.message);
           setLocationSearch('');
         }
       },
@@ -225,7 +225,7 @@ const App = () => {
             errorMessage = 'Location request timed out.';
             break;
         }
-        showMessage(`⚠️ ${errorMessage}`);
+        showMessage(`! ${errorMessage}`);
         setLocationSearch('');
       },
       {
@@ -263,7 +263,7 @@ const App = () => {
     // Fetch weather data for the selected location
     try {
       await api.getLocationWeather(locationData.latitude, locationData.longitude);
-      showMessage(`✅ Selected: ${locationData.display_name}`);
+      showMessage(`✓ Selected: ${locationData.display_name}`);
       
       // Update location ID with coordinates for backend
       const locationId = `${locationData.latitude},${locationData.longitude}`;
@@ -272,7 +272,7 @@ const App = () => {
       // Optionally fetch risk data immediately
       // await fetchRiskData(locationId);
     } catch (err) {
-      showMessage('⚠️ Failed to fetch weather data: ' + err.message);
+      showMessage('! Failed to fetch weather data: ' + err.message);
     }
   };
 
@@ -298,7 +298,7 @@ const App = () => {
     await addDoc(collection(db, `artifacts/${window.__app_id}/public/data/emergency_alerts`), {
       location: sosLocation, peopleCount, userId: user.uid, timestamp: Date.now()
     });
-    showMessage('🚨 SOS Alert Sent! Emergency services notified.');
+    showMessage('! SOS Alert Sent! Emergency services notified.');
   };
 
   const handleSaveLocation = async () => {
@@ -349,7 +349,7 @@ const App = () => {
       setChatHistory(prev => [...prev, assistantMsg]);
       
     } catch (err) {
-      showMessage('⚠️ Chat failed: ' + err.message);
+      showMessage('! Chat failed: ' + err.message);
     }
   };
 
@@ -377,17 +377,17 @@ const App = () => {
       <div className="relative z-10">
         <nav className="fixed top-6 left-1/2 -translate-x-1/2 bg-black/40 backdrop-blur-2xl border border-white/20 rounded-full px-8 py-3 shadow-2xl">
           <div className="flex gap-2 items-center">
-            <button onClick={() => setPage('dashboard')} className={`px-6 py-2 rounded-full transition font-medium ${page === 'dashboard' ? 'bg-white text-black shadow-lg' : 'text-white hover:bg-white/20'}`}>🏠 Home</button>
-            <button onClick={() => setPage('alerts')} className={`px-6 py-2 rounded-full transition font-medium ${page === 'alerts' ? 'bg-white text-black shadow-lg' : 'text-white hover:bg-white/20'}`}>🔔 Alerts</button>
-            <button onClick={() => setPage('saved')} className={`px-6 py-2 rounded-full transition font-medium ${page === 'saved' ? 'bg-white text-black shadow-lg' : 'text-white hover:bg-white/20'}`}>⭐ Saved</button>
-            <button onClick={() => setPage('chat')} className={`px-6 py-2 rounded-full transition font-medium ${page === 'chat' ? 'bg-white text-black shadow-lg' : 'text-white hover:bg-white/20'}`}>💬 AI Chat</button>
-            <button onClick={() => setPage('sos')} className={`px-6 py-2 rounded-full transition font-medium ${page === 'sos' ? 'bg-red-500 text-white shadow-lg' : 'text-white hover:bg-red-500/30'}`}>🚨 SOS</button>
+            <button onClick={() => setPage('dashboard')} className={`px-6 py-2 rounded-full transition font-medium ${page === 'dashboard' ? 'bg-white text-black shadow-lg' : 'text-white hover:bg-white/20'}`}>Home</button>
+            <button onClick={() => setPage('alerts')} className={`px-6 py-2 rounded-full transition font-medium ${page === 'alerts' ? 'bg-white text-black shadow-lg' : 'text-white hover:bg-white/20'}`}>Alerts</button>
+            <button onClick={() => setPage('saved')} className={`px-6 py-2 rounded-full transition font-medium ${page === 'saved' ? 'bg-white text-black shadow-lg' : 'text-white hover:bg-white/20'}`}>Saved</button>
+            <button onClick={() => setPage('chat')} className={`px-6 py-2 rounded-full transition font-medium ${page === 'chat' ? 'bg-white text-black shadow-lg' : 'text-white hover:bg-white/20'}`}>AI Chat</button>
+            <button onClick={() => setPage('sos')} className={`px-6 py-2 rounded-full transition font-medium ${page === 'sos' ? 'bg-red-500 text-white shadow-lg' : 'text-white hover:bg-red-500/30'}`}>SOS</button>
           </div>
         </nav>
 
         {user && (
           <div className="fixed top-6 right-6 bg-black/40 backdrop-blur-2xl border border-white/20 rounded-full px-6 py-3 shadow-2xl">
-            <span className="text-white text-sm font-medium">👤 {user.uid.slice(0, 8)}</span>
+            <span className="text-white text-sm font-medium">User: {user.uid.slice(0, 8)}</span>
           </div>
         )}
 
@@ -400,7 +400,7 @@ const App = () => {
         {page === 'dashboard' && (
           <div className="fixed left-6 top-24 w-96 space-y-4 max-h-[calc(100vh-120px)] overflow-y-auto">
             <div className="bg-black/40 backdrop-blur-2xl rounded-3xl p-6 border border-white/20 shadow-2xl">
-              <h2 className="text-2xl font-bold mb-4 text-white">🌍 Search Location</h2>
+              <h2 className="text-2xl font-bold mb-4 text-white">Search Location</h2>
               <div className="space-y-3">
                 <div className="relative">
                   <input
@@ -422,7 +422,7 @@ const App = () => {
                         className="w-full text-left px-4 py-3 hover:bg-green-50 border-b border-gray-100 transition bg-green-50/50"
                       >
                         <div className="font-semibold text-green-700 flex items-center gap-2">
-                          📍 Use Current Location
+                          &gt; Use Current Location
                         </div>
                         <div className="text-xs text-green-600">
                           Detect your location automatically
@@ -448,7 +448,7 @@ const App = () => {
                 {selectedLocation && (
                   <div className="bg-blue-500/20 rounded-xl p-3 border border-blue-400/30">
                     <div className="text-white text-sm">
-                      <div className="font-semibold">📍 {selectedLocation.name}</div>
+                      <div className="font-semibold">• {selectedLocation.name}</div>
                       {selectedLocation.admin1 && selectedLocation.country && (
                         <div className="text-xs text-white/70 mt-1">
                           {selectedLocation.admin1}, {selectedLocation.country}
@@ -488,7 +488,7 @@ const App = () => {
 
                 {riskData.weather_snapshot && (
                   <div className="bg-black/40 backdrop-blur-2xl rounded-3xl p-6 border border-white/20 shadow-2xl">
-                    <h3 className="text-lg font-semibold mb-4 text-white">🌡️ Current Weather</h3>
+                    <h3 className="text-lg font-semibold mb-4 text-white">Current Weather</h3>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="bg-white/10 rounded-xl p-3">
                         <div className="text-white/70 text-xs">Temperature</div>
@@ -512,7 +512,7 @@ const App = () => {
 
                 {riskData.ai_explanation && (
                   <div className="bg-black/40 backdrop-blur-2xl rounded-3xl p-6 border border-white/20 shadow-2xl">
-                    <h3 className="text-lg font-semibold mb-3 text-white">🤖 AI Explanation</h3>
+                    <h3 className="text-lg font-semibold mb-3 text-white">AI Explanation</h3>
                     <p className="text-white/90 text-sm leading-relaxed">{riskData.ai_explanation}</p>
                   </div>
                 )}
@@ -521,7 +521,7 @@ const App = () => {
 
             {error && (
               <div className="bg-red-500/40 backdrop-blur-2xl rounded-3xl p-6 border-2 border-red-400/50 shadow-2xl">
-                <h3 className="text-white font-semibold">⚠️ Error</h3>
+                <h3 className="text-white font-semibold">! Error</h3>
                 <p className="text-white/90 text-sm mt-2">{error}</p>
               </div>
             )}
@@ -531,7 +531,7 @@ const App = () => {
         {page === 'alerts' && (
           <div className="fixed left-6 top-24 w-96">
             <div className="bg-black/40 backdrop-blur-2xl rounded-3xl p-6 border border-white/20 shadow-2xl">
-              <h2 className="text-2xl font-bold mb-4 text-white">🔔 Subscribe</h2>
+              <h2 className="text-2xl font-bold mb-4 text-white">Subscribe to Alerts</h2>
               <div className="space-y-3">
                 <input
                   type="email"
@@ -556,7 +556,7 @@ const App = () => {
         {page === 'saved' && (
           <div className="fixed left-6 top-24 w-96 max-h-[calc(100vh-120px)] overflow-y-auto">
             <div className="bg-black/40 backdrop-blur-2xl rounded-3xl p-6 border border-white/20 shadow-2xl">
-              <h2 className="text-2xl font-bold mb-4 text-white">⭐ Saved Locations</h2>
+              <h2 className="text-2xl font-bold mb-4 text-white">Saved Locations</h2>
               <div className="space-y-3 mb-4">
                 <input
                   type="text"
@@ -583,7 +583,7 @@ const App = () => {
           <div className="fixed left-6 top-24 w-96 max-h-[calc(100vh-120px)] flex flex-col">
             <div className="bg-black/40 backdrop-blur-2xl rounded-3xl border border-white/20 shadow-2xl flex-1 flex flex-col">
               <div className="p-6 border-b border-white/20">
-                <h2 className="text-2xl font-bold text-white">💬 AI Assistant</h2>
+                <h2 className="text-2xl font-bold text-white">AI Assistant</h2>
                 <p className="text-white/60 text-sm mt-1">Ask about weather and disaster risks</p>
               </div>
               
@@ -626,7 +626,7 @@ const App = () => {
         {page === 'sos' && (
           <div className="fixed left-6 top-24 w-96 max-h-[calc(100vh-120px)] overflow-y-auto space-y-4">
             <div className="bg-red-500/40 backdrop-blur-2xl rounded-3xl p-6 border-2 border-red-400/50 shadow-2xl">
-              <h2 className="text-2xl font-bold mb-4 text-white">🚨 Emergency</h2>
+              <h2 className="text-2xl font-bold mb-4 text-white">Emergency SOS</h2>
               <div className="space-y-3">
                 <input
                   type="text"
@@ -651,8 +651,8 @@ const App = () => {
               <div className="space-y-2">
                 {sosAlerts.map((alert) => (
                   <div key={alert.id} className="p-3 bg-red-500/20 rounded-xl border border-red-400/30">
-                    <p className="text-white text-sm font-semibold">📍 {alert.location}</p>
-                    <p className="text-xs text-white/70">👥 {alert.peopleCount} | {alert.userId?.slice(0, 8)}</p>
+                    <p className="text-white text-sm font-semibold">Location: {alert.location}</p>
+                    <p className="text-xs text-white/70">People: {alert.peopleCount} | User: {alert.userId?.slice(0, 8)}</p>
                   </div>
                 ))}
               </div>
