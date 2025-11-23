@@ -48,6 +48,24 @@ export async function getCurrentRisk(locationId = 'default') {
 }
 
 /**
+ * Analyze weather data for disaster risk using Gemini AI
+ * @param {Object} location - Location data with name, latitude, longitude
+ * @param {Object} currentWeather - Current weather conditions
+ * @param {Array} historicalWeather - Historical weather data (last 3 days)
+ * @returns {Promise<Object>} Risk analysis with disaster prediction
+ */
+export async function analyzeWeatherData(location, currentWeather, historicalWeather) {
+  return apiFetch('/api/v1/risk/analyze', {
+    method: 'POST',
+    body: JSON.stringify({
+      location: location,
+      current_weather: currentWeather,
+      historical_weather: historicalWeather
+    }),
+  });
+}
+
+/**
  * Get weather trend data for comparison
  * @param {string} locationId - Location identifier
  * @param {number} days - Number of days for trend analysis (default: 7)
@@ -268,6 +286,65 @@ export async function getLocationWeather(latitude, longitude) {
   }
 }
 
+/**
+ * Get historical weather data for the last 3 days using Open-Meteo Historical API
+ * @param {number} latitude - Latitude coordinate
+ * @param {number} longitude - Longitude coordinate
+ * @returns {Promise<Object>} Historical weather data for last 3 days
+ */
+export async function getHistoricalWeather(latitude, longitude) {
+  try {
+    // Calculate dates for last 3 days
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 3);
+    
+    const formatDate = (date) => {
+      return date.toISOString().split('T')[0];
+    };
+    
+    const response = await fetch(
+      `https://archive-api.open-meteo.com/v1/archive?latitude=${latitude}&longitude=${longitude}&start_date=${formatDate(startDate)}&end_date=${formatDate(endDate)}&daily=temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum,rain_sum,wind_speed_10m_max,wind_direction_10m_dominant&timezone=auto`
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Historical Weather API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    // Format the historical data
+    const daily = data.daily || {};
+    const historicalData = [];
+    
+    if (daily.time) {
+      for (let i = 0; i < daily.time.length; i++) {
+        historicalData.push({
+          date: daily.time[i],
+          temperature_max: daily.temperature_2m_max?.[i],
+          temperature_min: daily.temperature_2m_min?.[i],
+          temperature_mean: daily.temperature_2m_mean?.[i],
+          precipitation: daily.precipitation_sum?.[i],
+          rain: daily.rain_sum?.[i],
+          wind_speed_max: daily.wind_speed_10m_max?.[i],
+          wind_direction: daily.wind_direction_10m_dominant?.[i]
+        });
+      }
+    }
+    
+    return {
+      latitude: latitude,
+      longitude: longitude,
+      timezone: data.timezone,
+      historical_data: historicalData,
+      days_count: historicalData.length
+    };
+  } catch (error) {
+    console.error('Historical weather fetch error:', error);
+    throw error;
+  }
+}
+
 // ============================================================================
 // Health Check
 // ============================================================================
@@ -297,6 +374,7 @@ export default {
   getCurrentRisk,
   getRiskTrends,
   getHourlyPredictions,
+  analyzeWeatherData,
   
   // Gemini AI
   explainPrediction,
@@ -313,6 +391,7 @@ export default {
   // Location Search
   searchLocation,
   getLocationWeather,
+  getHistoricalWeather,
   
   // Health
   checkHealth,

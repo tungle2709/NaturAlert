@@ -29,6 +29,7 @@ const App = () => {
   const [locationResults, setLocationResults] = useState([]);
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState(null);
+  const [historicalWeather, setHistoricalWeather] = useState(null);
   const globeEl = useRef();
   const globeInstance = useRef();
   const searchTimeoutRef = useRef(null);
@@ -199,14 +200,49 @@ const App = () => {
           }
           
           // Fetch weather data
-          await api.getLocationWeather(latitude, longitude);
-          showMessage(`✓ Using your current location: ${locationName}`);
+          const currentWeatherData = await api.getLocationWeather(latitude, longitude);
+          
+          // Fetch historical weather data for last 3 days
+          const historical = await api.getHistoricalWeather(latitude, longitude);
+          setHistoricalWeather(historical);
+          console.log('Historical weather data:', historical);
+          
+          showMessage(`✓ Analyzing weather data...`);
+          
+          // Analyze weather data with Gemini AI for disaster prediction
+          const analysis = await api.analyzeWeatherData(
+            {
+              name: locationName,
+              latitude: latitude,
+              longitude: longitude
+            },
+            currentWeatherData.weather,
+            historical.historical_data
+          );
+          
+          // Format analysis as risk data
+          setRiskData({
+            location_id: `${latitude},${longitude}`,
+            risk_score: analysis.risk_score,
+            disaster_type: analysis.disaster_type,
+            confidence: analysis.confidence,
+            has_risk: analysis.has_risk,
+            ai_explanation: analysis.explanation,
+            recommendations: analysis.recommendations,
+            weather_snapshot: {
+              temperature: currentWeatherData.weather.temperature,
+              pressure: currentWeatherData.weather.pressure,
+              humidity: currentWeatherData.weather.humidity,
+              wind_speed: currentWeatherData.weather.wind_speed,
+              rainfall_24h: currentWeatherData.weather.precipitation,
+              timestamp: currentWeatherData.weather.timestamp
+            }
+          });
+          
+          showMessage(`✓ Analysis complete: ${locationName}`);
           
           const locationId = `${latitude},${longitude}`;
           setLocation(locationId);
-          
-          // Automatically fetch risk data for current location
-          await fetchRiskData(locationId);
         } catch (err) {
           showMessage('! Failed to fetch location data: ' + err.message);
           setLocationSearch('');
@@ -240,6 +276,7 @@ const App = () => {
     setSelectedLocation(locationData);
     setLocationSearch(locationData.display_name);
     setShowLocationDropdown(false);
+    setLoading(true);
     
     // Move globe to selected location
     if (globeInstance.current) {
@@ -262,17 +299,57 @@ const App = () => {
     
     // Fetch weather data for the selected location
     try {
-      await api.getLocationWeather(locationData.latitude, locationData.longitude);
-      showMessage(`✓ Selected: ${locationData.display_name}`);
+      // Fetch current weather
+      const currentWeatherData = await api.getLocationWeather(locationData.latitude, locationData.longitude);
       
-      // Update location ID with coordinates for backend
+      // Fetch historical weather data for last 3 days
+      const historical = await api.getHistoricalWeather(locationData.latitude, locationData.longitude);
+      setHistoricalWeather(historical);
+      console.log('Historical weather data:', historical);
+      
+      showMessage(`✓ Analyzing weather data...`);
+      
+      // Analyze weather data with Gemini AI for disaster prediction
+      const analysis = await api.analyzeWeatherData(
+        {
+          name: locationData.name,
+          latitude: locationData.latitude,
+          longitude: locationData.longitude
+        },
+        currentWeatherData.weather,
+        historical.historical_data
+      );
+      
+      // Format analysis as risk data
+      setRiskData({
+        location_id: analysis.location_id,
+        risk_score: analysis.risk_score,
+        disaster_type: analysis.disaster_type,
+        confidence: analysis.confidence,
+        has_risk: analysis.has_risk,
+        ai_explanation: analysis.explanation,
+        recommendations: analysis.recommendations,
+        weather_snapshot: {
+          temperature: currentWeatherData.weather.temperature,
+          pressure: currentWeatherData.weather.pressure,
+          humidity: currentWeatherData.weather.humidity,
+          wind_speed: currentWeatherData.weather.wind_speed,
+          rainfall_24h: currentWeatherData.weather.precipitation,
+          timestamp: currentWeatherData.weather.timestamp
+        }
+      });
+      
+      showMessage(`✓ Analysis complete: ${locationData.display_name}`);
+      
+      // Update location ID
       const locationId = `${locationData.latitude},${locationData.longitude}`;
       setLocation(locationId);
       
-      // Optionally fetch risk data immediately
-      // await fetchRiskData(locationId);
     } catch (err) {
-      showMessage('! Failed to fetch weather data: ' + err.message);
+      showMessage('! Failed to analyze weather data: ' + err.message);
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -512,11 +589,45 @@ const App = () => {
 
                 {riskData.ai_explanation && (
                   <div className="bg-black/40 backdrop-blur-2xl rounded-3xl p-6 border border-white/20 shadow-2xl">
-                    <h3 className="text-lg font-semibold mb-3 text-white">AI Explanation</h3>
+                    <h3 className="text-lg font-semibold mb-3 text-white">AI Analysis</h3>
                     <p className="text-white/90 text-sm leading-relaxed">{riskData.ai_explanation}</p>
                   </div>
                 )}
+
+                {riskData.recommendations && riskData.has_risk && (
+                  <div className="bg-orange-500/40 backdrop-blur-2xl rounded-3xl p-6 border-2 border-orange-400/50 shadow-2xl">
+                    <h3 className="text-lg font-semibold mb-3 text-white">! Safety Recommendations</h3>
+                    <p className="text-white/90 text-sm leading-relaxed">{riskData.recommendations}</p>
+                  </div>
+                )}
               </>
+            )}
+
+            {historicalWeather && (
+              <div className="bg-black/40 backdrop-blur-2xl rounded-3xl p-6 border border-white/20 shadow-2xl">
+                <h3 className="text-lg font-semibold mb-4 text-white">Last 3 Days Weather</h3>
+                <div className="space-y-3">
+                  {historicalWeather.historical_data.map((day, idx) => (
+                    <div key={idx} className="bg-white/10 rounded-xl p-3">
+                      <div className="text-white/90 text-sm font-semibold mb-2">{day.date}</div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="text-white/70">
+                          Temp: {day.temperature_min?.toFixed(1)}°C - {day.temperature_max?.toFixed(1)}°C
+                        </div>
+                        <div className="text-white/70">
+                          Avg: {day.temperature_mean?.toFixed(1)}°C
+                        </div>
+                        <div className="text-white/70">
+                          Rain: {day.precipitation?.toFixed(1)} mm
+                        </div>
+                        <div className="text-white/70">
+                          Wind: {day.wind_speed_max?.toFixed(0)} km/h
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
 
             {error && (

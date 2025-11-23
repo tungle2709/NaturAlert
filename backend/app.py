@@ -172,12 +172,16 @@ def health_check():
 # Risk Assessment Endpoints
 # ============================================================================
 
-@app.get("/api/v1/risk/current", response_model=RiskResponse, tags=["Risk Assessment"])
+@app.get("/api/v1/risk/current", tags=["Risk Assessment"])
 def get_current_risk(
-    location_id: str = Query(default="default", description="Location identifier")
+    location_id: str = Query(default="default", description="Location identifier (coordinates as lat,lng)")
 ):
     """
     Get current disaster risk assessment for a location.
+    
+    Accepts coordinates as location_id (e.g., "43.59,-79.64")
+    Fetches last 3 days of weather data from Open-Meteo API
+    Uses Gemini AI to analyze disaster risk
     
     Returns:
         - Current risk score (0-100%)
@@ -186,24 +190,338 @@ def get_current_risk(
         - Weather snapshot
         - AI-generated explanation
     """
-    if prediction_engine is None:
+    try:
+        # Check if location_id is coordinates (contains comma)
+        if ',' in location_id:
+            # Parse coordinates
+            try:
+                lat_str, lng_str = location_id.split(',')
+                latitude = float(lat_str)
+                longitude = float(lng_str)
+            except (ValueError, IndexError):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid coordinates format. Use: latitude,longitude"
+                )
+            
+            # Fetch weather data from Open-Meteo API
+            import requests
+            
+            # Get current weather
+            current_response = requests.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params={
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "current": "temperature_2m,relative_humidity_2m,precipitation,surface_pressure,wind_speed_10m,wind_direction_10m",
+                    "timezone": "auto"
+                },
+                timeout=10
+            )
+            
+            if current_response.status_code != 200:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Failed to fetch current weather data"
+                )
+            
+            current_data = current_response.json()
+            current_weather = current_data.get("current", {})
+            
+            # Get historical weather (last 3 days)
+            from datetime import datetime, timedelta
+            end_date = datetime.now().date()
+            start_date = end_date - timedelta(days=3)
+            
+            historical_response = requests.get(
+                "https://archive-api.open-meteo.com/v1/archive",
+                params={
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "start_date": start_date.isoformat(),
+                    "end_date": end_date.isoformat(),
+                    "daily": "temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum,wind_speed_10m_max,surface_pressure_mean",
+                    "timezone": "auto"
+                },
+                timeout=10
+            )
+            
+            if historical_response.status_code != 200:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Failed to fetch historical weather data"
+                )
+            
+            historical_data = historical_response.json()
+            daily = historical_data.get("daily", {})
+            
+            # Format historical weather
+            historical_weather = []
+            if "time" in daily:
+                for i in range(len(daily["time"])):
+                    historical_weather.append({
+                        "date": daily["time"][i],
+                        "temperature_max": daily.get("temperature_2m_max", [])[i] if i < len(daily.get("temperature_2m_max", [])) else None,
+                        "temperature_min": daily.get("temperature_2m_min", [])[i] if i < len(daily.get("temperature_2m_min", [])) else None,
+                        "temperature_mean": daily.get("temperature_2m_mean", [])[i] if i < len(daily.get("temperature_2m_mean", [])) else None,
+                        "precipitation": daily.get("precipitation_sum", [])[i] if i < len(daily.get("precipitation_sum", [])) else None,
+                        "wind_speed_max": daily.get("wind_speed_10m_max", [])[i] if i < len(daily.get("wind_speed_10m_max", [])) else None,
+                        "pressure_mean": daily.get("surface_pressure_mean", [])[i] if i < len(daily.get("surface_pressure_mean", [])) else None
+                    })
+            
+            # Use Gemini AI to analyze the data
+            if gemini_service is None:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Gemini AI service not available"
+                )
+            
+            # Calculate accumulated precipitation over 3 days
+            total_precipitation = sum(day.get('precipitation', 0) or 0 for day in historical_weather)
+            
+            # Calculate average pressure
+            avg_pressure = sum(day.get('pressure_mean', 0) or 0 for day in historical_weather if day.get('pressure_mean')) / max(len([d for d in historical_weather if d.get('pressure_mean')]), 1)
+            
+            # Calculate max wind speed
+            max_wind = max((day.get('wind_speed_max', 0) or 0 for day in historical_weather), default=0)
+            
+            # Simple rule-based risk assessment
+            risk_score = 0
+            disaster_type = "none"
+            
+            # Check for flood risk
+            if total_precipitation > 100 and avg_pressure < 1000:
+                risk_score = min(100, 60 + (total_precipitation - 100) / 5)
+                disaster_type = "flood"
+            # Check for storm risk
+            elif max_wind > 40 and avg_pressure < 1005:
+                risk_score = min(100, 50 + (max_wind - 40) / 2)
+                disaster_type = "storm"
+            # Check for hurricane risk
+            elif max_wind > 120 and avg_pressure < 980:
+                risk_score = min(100, 80 + (120 - avg_pressure) / 10)
+                disaster_type = "hurricane"
+            # Check for heatwave
+            elif any(day.get('temperature_max', 0) > 35 for day in historical_weather):
+                hot_days = sum(1 for day in historical_weather if day.get('temperature_max', 0) > 35)
+                risk_score = min(100, 40 + hot_days * 15)
+                disaster_type = "heatwave"
+            else:
+                risk_score = 10  # Low baseline risk
+                disaster_type = "none"
+            
+            # Generate explanation using Gemini
+            explanation_prompt = f"""
+Explain the disaster risk for this location in 2-3 sentences.
+
+Location: {latitude}, {longitude}
+Risk Score: {risk_score:.0f}%
+Disaster Type: {disaster_type}
+
+Current Weather:
+- Temperature: {current_weather.get('temperature_2m')}°C
+- Humidity: {current_weather.get('relative_humidity_2m')}%
+- Pressure: {current_weather.get('surface_pressure')} hPa
+- Wind Speed: {current_weather.get('wind_speed_10m')} km/h
+
+Last 3 Days Summary:
+- Total Precipitation: {total_precipitation:.1f} mm
+- Average Pressure: {avg_pressure:.1f} hPa
+- Max Wind Speed: {max_wind:.1f} km/h
+
+Provide a clear, concise explanation of the risk level and what weather patterns are contributing to it.
+"""
+            
+            try:
+                explanation = gemini_service._safe_generate(
+                    explanation_prompt,
+                    f"Risk level is {risk_score:.0f}% for {disaster_type}. Based on recent weather patterns including precipitation of {total_precipitation:.1f}mm over 3 days and pressure at {avg_pressure:.1f} hPa."
+                )
+            except Exception as e:
+                explanation = f"Risk level is {risk_score:.0f}% for {disaster_type}. Based on recent weather patterns."
+            
+            analysis = {
+                "risk_score": risk_score,
+                "disaster_type": disaster_type,
+                "confidence": 75,  # Fixed confidence for rule-based system
+                "explanation": explanation
+            }
+            
+            # Format response
+            return {
+                "location_id": location_id,
+                "risk_score": analysis.get('risk_score', 0),
+                "disaster_type": analysis.get('disaster_type', 'none'),
+                "confidence": analysis.get('confidence', 0),
+                "confidence_interval": {
+                    "lower": max(0, analysis.get('confidence', 0) - 10),
+                    "upper": min(100, analysis.get('confidence', 0) + 10)
+                },
+                "model_version": "gemini-pro-1.0",
+                "timestamp": datetime.now().isoformat(),
+                "last_updated": datetime.now().isoformat(),
+                "weather_snapshot": {
+                    "temperature": current_weather.get('temperature_2m', 0),
+                    "pressure": current_weather.get('surface_pressure', 0),
+                    "humidity": current_weather.get('relative_humidity_2m', 0),
+                    "wind_speed": current_weather.get('wind_speed_10m', 0),
+                    "rainfall_24h": current_weather.get('precipitation', 0),
+                    "timestamp": current_weather.get('time', datetime.now().isoformat())
+                },
+                "ai_explanation": analysis.get('explanation', 'No explanation available')
+            }
+        
+        else:
+            # Use prediction engine for database locations
+            if prediction_engine is None:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Prediction engine not available. Please check model files."
+                )
+            
+            prediction = prediction_engine.get_current_prediction(location_id)
+            return prediction
+            
+    except HTTPException:
+        raise
+    except requests.exceptions.Timeout:
+        raise HTTPException(
+            status_code=504,
+            detail="Weather data request timed out"
+        )
+    except requests.exceptions.RequestException as e:
         raise HTTPException(
             status_code=503,
-            detail="Prediction engine not available. Please check model files."
-        )
-    
-    try:
-        prediction = prediction_engine.get_current_prediction(location_id)
-        return prediction
-    except ValueError as e:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Insufficient data for location {location_id}: {str(e)}"
+            detail=f"Weather service unavailable: {str(e)}"
         )
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Prediction failed: {str(e)}"
+        )
+
+
+@app.post("/api/v1/risk/analyze", tags=["Risk Assessment"])
+async def analyze_weather_data(request: Dict[str, Any]):
+    """
+    Analyze weather data and predict disaster risk using Gemini AI.
+    Accepts current and historical weather data from frontend.
+    
+    Request body:
+    {
+        "location": {"name": "London", "latitude": 51.5, "longitude": -0.1},
+        "current_weather": {...},
+        "historical_weather": [...]
+    }
+    """
+    if gemini_service is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Gemini AI service not available. Please check API key configuration."
+        )
+    
+    try:
+        location = request.get('location', {})
+        current_weather = request.get('current_weather', {})
+        historical_weather = request.get('historical_weather', [])
+        
+        # Create analysis prompt for Gemini
+        prompt = f"""
+Analyze the following weather data and determine if there are signs of any disaster risk.
+
+Location: {location.get('name', 'Unknown')}
+Coordinates: {location.get('latitude')}, {location.get('longitude')}
+
+Current Weather:
+- Temperature: {current_weather.get('temperature')}°C
+- Humidity: {current_weather.get('humidity')}%
+- Pressure: {current_weather.get('pressure')} hPa
+- Wind Speed: {current_weather.get('wind_speed')} km/h
+- Precipitation: {current_weather.get('precipitation')} mm
+
+Historical Weather (Last 3 Days):
+"""
+        
+        for day in historical_weather:
+            prompt += f"""
+Date: {day.get('date')}
+- Temp Range: {day.get('temperature_min')}°C to {day.get('temperature_max')}°C (Avg: {day.get('temperature_mean')}°C)
+- Precipitation: {day.get('precipitation')} mm
+- Wind Speed Max: {day.get('wind_speed_max')} km/h
+"""
+        
+        prompt += """
+
+Based on this data, provide a JSON response with the following structure:
+{
+  "has_disaster_risk": true/false,
+  "risk_score": 0-100,
+  "disaster_type": "flood|storm|hurricane|heatwave|none",
+  "confidence": 0-100,
+  "explanation": "Brief explanation of the analysis",
+  "recommendations": "Safety recommendations if risk exists"
+}
+
+Analyze for these disaster types:
+- Flood: Heavy accumulated rainfall, low pressure
+- Storm: Rapid pressure changes, high winds
+- Hurricane: Very low pressure, extreme winds, heavy rain
+- Heatwave: Sustained high temperatures
+- Extreme Cold: Sustained low temperatures
+- None: Normal weather conditions
+
+Respond ONLY with valid JSON, no additional text.
+"""
+        
+        # Call Gemini AI
+        import google.generativeai as genai
+        model = genai.GenerativeModel('gemini-pro')
+        response = model.generate_content(prompt)
+        
+        # Parse JSON response
+        import json
+        import re
+        
+        response_text = response.text.strip()
+        # Extract JSON from markdown code blocks if present
+        json_match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL)
+        if json_match:
+            response_text = json_match.group(1)
+        
+        analysis = json.loads(response_text)
+        
+        # Format response
+        return {
+            "location_id": f"{location.get('latitude')},{location.get('longitude')}",
+            "location_name": location.get('name', 'Unknown'),
+            "risk_score": analysis.get('risk_score', 0),
+            "disaster_type": analysis.get('disaster_type', 'none'),
+            "confidence": analysis.get('confidence', 0),
+            "has_risk": analysis.get('has_disaster_risk', False),
+            "explanation": analysis.get('explanation', ''),
+            "recommendations": analysis.get('recommendations', ''),
+            "timestamp": datetime.now().isoformat(),
+            "weather_snapshot": current_weather
+        }
+        
+    except json.JSONDecodeError as e:
+        # If JSON parsing fails, return a safe default
+        return {
+            "location_id": f"{location.get('latitude')},{location.get('longitude')}",
+            "location_name": location.get('name', 'Unknown'),
+            "risk_score": 0,
+            "disaster_type": "none",
+            "confidence": 0,
+            "has_risk": False,
+            "explanation": "Unable to analyze weather data. Please try again.",
+            "recommendations": "",
+            "timestamp": datetime.now().isoformat(),
+            "weather_snapshot": current_weather
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Analysis failed: {str(e)}"
         )
 
 

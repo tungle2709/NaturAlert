@@ -61,7 +61,11 @@ class GeminiService:
         # Configure Gemini API
         try:
             genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel('gemini-pro')
+            # Try gemini-2.5-flash first, fallback to gemini-1.5-flash
+            try:
+                self.model = genai.GenerativeModel('gemini-2.5-flash')
+            except:
+                self.model = genai.GenerativeModel('gemini-1.5-flash')
             self._initialized = True
         except Exception as e:
             self._initialized = False
