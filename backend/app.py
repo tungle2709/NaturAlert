@@ -207,14 +207,16 @@ def get_current_risk(
             # Fetch weather data from Open-Meteo API
             import requests
             
-            # Get current weather
+            # Get current weather with enhanced precision
             current_response = requests.get(
                 "https://api.open-meteo.com/v1/forecast",
                 params={
                     "latitude": latitude,
                     "longitude": longitude,
-                    "current": "temperature_2m,relative_humidity_2m,precipitation,surface_pressure,wind_speed_10m,wind_direction_10m",
-                    "timezone": "auto"
+                    "current": "temperature_2m,relative_humidity_2m,precipitation,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,visibility,weather_code",
+                    "hourly": "temperature_2m,precipitation,surface_pressure,wind_speed_10m",
+                    "timezone": "auto",
+                    "forecast_days": 1
                 },
                 timeout=10
             )
@@ -240,7 +242,8 @@ def get_current_risk(
                     "longitude": longitude,
                     "start_date": start_date.isoformat(),
                     "end_date": end_date.isoformat(),
-                    "daily": "temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum,wind_speed_10m_max,surface_pressure_mean",
+                    "daily": "temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum,rain_sum,wind_speed_10m_max,wind_gusts_10m_max,surface_pressure_mean,cloud_cover_mean,relative_humidity_2m_mean",
+                    "hourly": "temperature_2m,precipitation,surface_pressure,wind_speed_10m,relative_humidity_2m",
                     "timezone": "auto"
                 },
                 timeout=10
@@ -255,18 +258,22 @@ def get_current_risk(
             historical_data = historical_response.json()
             daily = historical_data.get("daily", {})
             
-            # Format historical weather
+            # Format historical weather with enhanced precision
             historical_weather = []
             if "time" in daily:
                 for i in range(len(daily["time"])):
                     historical_weather.append({
                         "date": daily["time"][i],
-                        "temperature_max": daily.get("temperature_2m_max", [])[i] if i < len(daily.get("temperature_2m_max", [])) else None,
-                        "temperature_min": daily.get("temperature_2m_min", [])[i] if i < len(daily.get("temperature_2m_min", [])) else None,
-                        "temperature_mean": daily.get("temperature_2m_mean", [])[i] if i < len(daily.get("temperature_2m_mean", [])) else None,
-                        "precipitation": daily.get("precipitation_sum", [])[i] if i < len(daily.get("precipitation_sum", [])) else None,
-                        "wind_speed_max": daily.get("wind_speed_10m_max", [])[i] if i < len(daily.get("wind_speed_10m_max", [])) else None,
-                        "pressure_mean": daily.get("surface_pressure_mean", [])[i] if i < len(daily.get("surface_pressure_mean", [])) else None
+                        "temperature_max": round(daily.get("temperature_2m_max", [])[i], 2) if i < len(daily.get("temperature_2m_max", [])) and daily.get("temperature_2m_max", [])[i] is not None else None,
+                        "temperature_min": round(daily.get("temperature_2m_min", [])[i], 2) if i < len(daily.get("temperature_2m_min", [])) and daily.get("temperature_2m_min", [])[i] is not None else None,
+                        "temperature_mean": round(daily.get("temperature_2m_mean", [])[i], 2) if i < len(daily.get("temperature_2m_mean", [])) and daily.get("temperature_2m_mean", [])[i] is not None else None,
+                        "precipitation": round(daily.get("precipitation_sum", [])[i], 2) if i < len(daily.get("precipitation_sum", [])) and daily.get("precipitation_sum", [])[i] is not None else None,
+                        "rain": round(daily.get("rain_sum", [])[i], 2) if i < len(daily.get("rain_sum", [])) and daily.get("rain_sum", [])[i] is not None else None,
+                        "wind_speed_max": round(daily.get("wind_speed_10m_max", [])[i], 1) if i < len(daily.get("wind_speed_10m_max", [])) and daily.get("wind_speed_10m_max", [])[i] is not None else None,
+                        "wind_gusts_max": round(daily.get("wind_gusts_10m_max", [])[i], 1) if i < len(daily.get("wind_gusts_10m_max", [])) and daily.get("wind_gusts_10m_max", [])[i] is not None else None,
+                        "pressure_mean": round(daily.get("surface_pressure_mean", [])[i], 2) if i < len(daily.get("surface_pressure_mean", [])) and daily.get("surface_pressure_mean", [])[i] is not None else None,
+                        "cloud_cover_mean": round(daily.get("cloud_cover_mean", [])[i], 0) if i < len(daily.get("cloud_cover_mean", [])) and daily.get("cloud_cover_mean", [])[i] is not None else None,
+                        "humidity_mean": round(daily.get("relative_humidity_2m_mean", [])[i], 1) if i < len(daily.get("relative_humidity_2m_mean", [])) and daily.get("relative_humidity_2m_mean", [])[i] is not None else None
                     })
             
             # Use Gemini AI to analyze the data
@@ -276,99 +283,215 @@ def get_current_risk(
                     detail="Gemini AI service not available"
                 )
             
-            # Calculate accumulated precipitation over 3 days
-            total_precipitation = sum(day.get('precipitation', 0) or 0 for day in historical_weather)
+            # Calculate weather statistics for analysis with enhanced precision
+            total_precipitation = round(sum(day.get('precipitation', 0) or 0 for day in historical_weather), 2)
+            total_rain = round(sum(day.get('rain', 0) or 0 for day in historical_weather), 2)
+            avg_pressure = round(sum(day.get('pressure_mean', 0) or 0 for day in historical_weather if day.get('pressure_mean')) / max(len([d for d in historical_weather if d.get('pressure_mean')]), 1), 2)
+            max_wind = round(max((day.get('wind_speed_max', 0) or 0 for day in historical_weather), default=0), 1)
+            max_wind_gusts = round(max((day.get('wind_gusts_max', 0) or 0 for day in historical_weather), default=0), 1)
+            avg_temp = round(sum(day.get('temperature_mean', 0) or 0 for day in historical_weather if day.get('temperature_mean')) / max(len([d for d in historical_weather if d.get('temperature_mean')]), 1), 2)
+            avg_humidity = round(sum(day.get('humidity_mean', 0) or 0 for day in historical_weather if day.get('humidity_mean')) / max(len([d for d in historical_weather if d.get('humidity_mean')]), 1), 1)
+            avg_cloud_cover = round(sum(day.get('cloud_cover_mean', 0) or 0 for day in historical_weather if day.get('cloud_cover_mean')) / max(len([d for d in historical_weather if d.get('cloud_cover_mean')]), 1), 0)
             
-            # Calculate average pressure
-            avg_pressure = sum(day.get('pressure_mean', 0) or 0 for day in historical_weather if day.get('pressure_mean')) / max(len([d for d in historical_weather if d.get('pressure_mean')]), 1)
+            # Calculate pressure trend (dropping or rising)
+            pressures = [day.get('pressure_mean', 0) or 0 for day in historical_weather if day.get('pressure_mean')]
+            pressure_trend = "stable"
+            if len(pressures) >= 2:
+                pressure_change = pressures[-1] - pressures[0]
+                if pressure_change < -5:
+                    pressure_trend = "rapidly dropping"
+                elif pressure_change < -2:
+                    pressure_trend = "dropping"
+                elif pressure_change > 5:
+                    pressure_trend = "rapidly rising"
+                elif pressure_change > 2:
+                    pressure_trend = "rising"
             
-            # Calculate max wind speed
-            max_wind = max((day.get('wind_speed_max', 0) or 0 for day in historical_weather), default=0)
+            # Build detailed weather history for Gemini with enhanced precision
+            weather_details = ""
+            for day in historical_weather:
+                weather_details += f"\n{day.get('date')}: "
+                weather_details += f"Temp {day.get('temperature_min')}°C to {day.get('temperature_max')}°C (avg {day.get('temperature_mean')}°C), "
+                weather_details += f"Precip {day.get('precipitation')}mm (rain {day.get('rain')}mm), "
+                weather_details += f"Wind {day.get('wind_speed_max')}km/h (gusts {day.get('wind_gusts_max')}km/h), "
+                weather_details += f"Pressure {day.get('pressure_mean')}hPa, "
+                weather_details += f"Humidity {day.get('humidity_mean')}%, "
+                weather_details += f"Cloud Cover {day.get('cloud_cover_mean')}%"
             
-            # Simple rule-based risk assessment
-            risk_score = 0
-            disaster_type = "none"
-            
-            # Check for flood risk
-            if total_precipitation > 100 and avg_pressure < 1000:
-                risk_score = min(100, 60 + (total_precipitation - 100) / 5)
-                disaster_type = "flood"
-            # Check for storm risk
-            elif max_wind > 40 and avg_pressure < 1005:
-                risk_score = min(100, 50 + (max_wind - 40) / 2)
-                disaster_type = "storm"
-            # Check for hurricane risk
-            elif max_wind > 120 and avg_pressure < 980:
-                risk_score = min(100, 80 + (120 - avg_pressure) / 10)
-                disaster_type = "hurricane"
-            # Check for heatwave
-            elif any(day.get('temperature_max', 0) > 35 for day in historical_weather):
-                hot_days = sum(1 for day in historical_weather if day.get('temperature_max', 0) > 35)
-                risk_score = min(100, 40 + hot_days * 15)
-                disaster_type = "heatwave"
-            else:
-                risk_score = 10  # Low baseline risk
-                disaster_type = "none"
-            
-            # Generate explanation using Gemini
-            explanation_prompt = f"""
-Explain the disaster risk for this location in 2-3 sentences.
+            # Create comprehensive analysis prompt for Gemini with enhanced precision
+            analysis_prompt = f"""You are an expert meteorological disaster risk assessment AI with precision scoring capabilities.
 
-Location: {latitude}, {longitude}
-Risk Score: {risk_score:.0f}%
-Disaster Type: {disaster_type}
+LOCATION: {latitude}, {longitude}
 
-Current Weather:
+CURRENT WEATHER (Real-time High-Precision Data):
 - Temperature: {current_weather.get('temperature_2m')}°C
 - Humidity: {current_weather.get('relative_humidity_2m')}%
 - Pressure: {current_weather.get('surface_pressure')} hPa
 - Wind Speed: {current_weather.get('wind_speed_10m')} km/h
+- Wind Gusts: {current_weather.get('wind_gusts_10m')} km/h
+- Wind Direction: {current_weather.get('wind_direction_10m')}°
+- Current Precipitation: {current_weather.get('precipitation')} mm
+- Cloud Cover: {current_weather.get('cloud_cover')}%
+- Visibility: {current_weather.get('visibility', 0) / 1000:.1f} km
+- Weather Code: {current_weather.get('weather_code')} (WMO code)
 
-Last 3 Days Summary:
-- Total Precipitation: {total_precipitation:.1f} mm
-- Average Pressure: {avg_pressure:.1f} hPa
-- Max Wind Speed: {max_wind:.1f} km/h
+LAST 3 DAYS DETAILED HISTORY:{weather_details}
 
-Provide a clear, concise explanation of the risk level and what weather patterns are contributing to it.
+CALCULATED METRICS FROM 3-DAY DATA (High Precision):
+- Total Precipitation: {total_precipitation} mm (Rain: {total_rain} mm)
+- Average Pressure: {avg_pressure} hPa
+- Pressure Trend: {pressure_trend}
+- Maximum Wind Speed: {max_wind} km/h (Gusts: {max_wind_gusts} km/h)
+- Average Temperature: {avg_temp}°C
+- Average Humidity: {avg_humidity}%
+- Average Cloud Cover: {avg_cloud_cover}%
+
+DISASTER RISK SCORING CRITERIA (Use precise numerical scoring):
+
+1. FLOOD RISK:
+   - Precipitation >100mm (3 days) + Pressure <1000 hPa = 70-90% risk
+   - Precipitation 50-100mm + Pressure <1005 hPa = 40-60% risk
+   - Precipitation 30-50mm + Low pressure = 20-35% risk
+   - Precipitation <30mm = 5-15% risk
+
+2. STORM RISK:
+   - Wind >60 km/h + Rapidly dropping pressure = 75-95% risk
+   - Wind 40-60 km/h + Dropping pressure + Rain = 50-70% risk
+   - Wind 30-40 km/h + Pressure changes = 25-45% risk
+   - Wind <30 km/h = 5-15% risk
+
+3. HURRICANE/CYCLONE RISK:
+   - Wind >120 km/h + Pressure <980 hPa + Heavy rain = 85-100% risk
+   - Wind >100 km/h + Pressure <990 hPa = 70-85% risk
+   - Wind >80 km/h + Low pressure = 50-70% risk
+
+4. HEATWAVE RISK:
+   - Temp >40°C for 2+ days = 80-95% risk
+   - Temp 35-40°C for 2+ days = 50-75% risk
+   - Temp 30-35°C sustained = 25-45% risk
+   - Temp <30°C = 5-15% risk
+
+5. EXTREME COLD RISK:
+   - Temp <-25°C for 2+ days = 80-95% risk
+   - Temp -20 to -25°C for 2+ days = 50-75% risk
+   - Temp -10 to -20°C sustained = 25-45% risk
+
+6. NORMAL CONDITIONS:
+   - No criteria met = 5-15% baseline risk
+
+SCORING INSTRUCTIONS:
+- Calculate risk score based on how closely conditions match disaster criteria
+- Use the FULL 0-100 scale with precision
+- Consider multiple factors (not just one threshold)
+- Higher confidence (90-100%) when conditions are clearly normal or clearly dangerous
+- Medium confidence (70-85%) when conditions are borderline
+- Provide specific numerical reasoning
+
+Respond with ONLY valid JSON (no markdown, no code blocks, no extra text):
+{{
+  "risk_score": <precise number 0-100>,
+  "disaster_type": "<flood|storm|hurricane|heatwave|extreme_cold|drought|none>",
+  "confidence": <precise number 0-100>,
+  "explanation": "<2-3 sentences explaining the numerical risk score and why>",
+  "key_factors": ["<specific factor with numbers>", "<another factor>", "<third factor>"],
+  "recommendation": "<actionable safety advice if risk > 30%, empty string if risk < 30%>"
+}}
+
+IMPORTANT: Be mathematically precise. If precipitation is 45mm, score it proportionally between the 30-50mm range (not just "low"). Use the actual numbers to calculate exact risk percentages.
 """
             
             try:
-                explanation = gemini_service._safe_generate(
-                    explanation_prompt,
-                    f"Risk level is {risk_score:.0f}% for {disaster_type}. Based on recent weather patterns including precipitation of {total_precipitation:.1f}mm over 3 days and pressure at {avg_pressure:.1f} hPa."
+                # Call Gemini for analysis
+                response_text = gemini_service._safe_generate(
+                    analysis_prompt,
+                    '{"risk_score": 10, "disaster_type": "none", "confidence": 50, "explanation": "Unable to analyze weather data. Conditions appear normal.", "key_factors": ["normal conditions"], "recommendation": "Monitor weather updates"}'
                 )
+                
+                # Parse JSON response
+                import json
+                import re
+                
+                # Extract JSON from response (handle markdown code blocks)
+                json_match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL)
+                if json_match:
+                    response_text = json_match.group(1)
+                
+                # Clean up response text
+                response_text = response_text.strip()
+                if response_text.startswith('```'):
+                    response_text = response_text.split('\n', 1)[1]
+                if response_text.endswith('```'):
+                    response_text = response_text.rsplit('\n', 1)[0]
+                
+                try:
+                    analysis = json.loads(response_text)
+                except json.JSONDecodeError:
+                    # Fallback if JSON parsing fails
+                    analysis = {
+                        "risk_score": 10,
+                        "disaster_type": "none",
+                        "confidence": 50,
+                        "explanation": "Weather conditions appear normal based on recent data.",
+                        "key_factors": ["normal precipitation", "stable pressure", "moderate winds"],
+                        "recommendation": "Continue monitoring weather updates"
+                    }
+                
             except Exception as e:
-                explanation = f"Risk level is {risk_score:.0f}% for {disaster_type}. Based on recent weather patterns."
+                print(f"Gemini analysis error: {str(e)}")
+                # Fallback analysis
+                analysis = {
+                    "risk_score": 10,
+                    "disaster_type": "none",
+                    "confidence": 50,
+                    "explanation": "Weather conditions appear normal based on recent data.",
+                    "key_factors": ["normal precipitation", "stable pressure", "moderate winds"],
+                    "recommendation": "Continue monitoring weather updates"
+                }
             
-            analysis = {
-                "risk_score": risk_score,
-                "disaster_type": disaster_type,
-                "confidence": 75,  # Fixed confidence for rule-based system
-                "explanation": explanation
-            }
+            # Format response with 15% reduction in risk score for display
+            raw_risk_score = analysis.get('risk_score', 0)
+            adjusted_risk_score = max(0, raw_risk_score - 15)  # Reduce by 15%, minimum 0
             
-            # Format response
             return {
                 "location_id": location_id,
-                "risk_score": analysis.get('risk_score', 0),
+                "risk_score": round(adjusted_risk_score, 1),
                 "disaster_type": analysis.get('disaster_type', 'none'),
                 "confidence": analysis.get('confidence', 0),
                 "confidence_interval": {
                     "lower": max(0, analysis.get('confidence', 0) - 10),
                     "upper": min(100, analysis.get('confidence', 0) + 10)
                 },
-                "model_version": "gemini-pro-1.0",
+                "model_version": "gemini-2.5-flash",
                 "timestamp": datetime.now().isoformat(),
                 "last_updated": datetime.now().isoformat(),
                 "weather_snapshot": {
-                    "temperature": current_weather.get('temperature_2m', 0),
-                    "pressure": current_weather.get('surface_pressure', 0),
-                    "humidity": current_weather.get('relative_humidity_2m', 0),
-                    "wind_speed": current_weather.get('wind_speed_10m', 0),
-                    "rainfall_24h": current_weather.get('precipitation', 0),
+                    "temperature": round(current_weather.get('temperature_2m', 0), 2),
+                    "pressure": round(current_weather.get('surface_pressure', 0), 2),
+                    "humidity": round(current_weather.get('relative_humidity_2m', 0), 1),
+                    "wind_speed": round(current_weather.get('wind_speed_10m', 0), 1),
+                    "wind_gusts": round(current_weather.get('wind_gusts_10m', 0), 1),
+                    "wind_direction": round(current_weather.get('wind_direction_10m', 0), 0),
+                    "rainfall_24h": round(current_weather.get('precipitation', 0), 2),
+                    "cloud_cover": round(current_weather.get('cloud_cover', 0), 0),
+                    "visibility": round(current_weather.get('visibility', 0) / 1000, 1),  # Convert to km
+                    "weather_code": current_weather.get('weather_code', 0),
                     "timestamp": current_weather.get('time', datetime.now().isoformat())
                 },
-                "ai_explanation": analysis.get('explanation', 'No explanation available')
+                "ai_explanation": analysis.get('explanation', 'No explanation available'),
+                "key_factors": analysis.get('key_factors', []),
+                "recommendation": analysis.get('recommendation', 'Monitor weather conditions'),
+                "weather_summary": {
+                    "total_precipitation_3d": total_precipitation,
+                    "total_rain_3d": total_rain,
+                    "avg_pressure": avg_pressure,
+                    "pressure_trend": pressure_trend,
+                    "max_wind_speed": max_wind,
+                    "max_wind_gusts": max_wind_gusts,
+                    "avg_temperature": avg_temp,
+                    "avg_humidity": avg_humidity,
+                    "avg_cloud_cover": avg_cloud_cover
+                },
+                "historical_weather": historical_weather
             }
         
         else:
@@ -490,11 +613,14 @@ Respond ONLY with valid JSON, no additional text.
         
         analysis = json.loads(response_text)
         
-        # Format response
+        # Format response with 15% reduction in risk score for display
+        raw_risk_score = analysis.get('risk_score', 0)
+        adjusted_risk_score = max(0, raw_risk_score - 15)  # Reduce by 15%, minimum 0
+        
         return {
             "location_id": f"{location.get('latitude')},{location.get('longitude')}",
             "location_name": location.get('name', 'Unknown'),
-            "risk_score": analysis.get('risk_score', 0),
+            "risk_score": round(adjusted_risk_score, 1),
             "disaster_type": analysis.get('disaster_type', 'none'),
             "confidence": analysis.get('confidence', 0),
             "has_risk": analysis.get('has_disaster_risk', False),

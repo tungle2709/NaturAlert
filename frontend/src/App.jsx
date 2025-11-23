@@ -145,6 +145,13 @@ const App = () => {
     showMessage('> Getting your location...');
     setLocationSearch('Getting your location...');
     
+    // Enhanced geolocation options
+    const geoOptions = {
+      enableHighAccuracy: true,  // Use GPS if available
+      timeout: 10000,            // 10 second timeout
+      maximumAge: 0              // Don't use cached position
+    };
+    
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
@@ -199,50 +206,15 @@ const App = () => {
             }]);
           }
           
-          // Fetch weather data
-          const currentWeatherData = await api.getLocationWeather(latitude, longitude);
-          
-          // Fetch historical weather data for last 3 days
-          const historical = await api.getHistoricalWeather(latitude, longitude);
-          setHistoricalWeather(historical);
-          console.log('Historical weather data:', historical);
-          
           showMessage(`✓ Analyzing weather data...`);
           
-          // Analyze weather data with Gemini AI for disaster prediction
-          const analysis = await api.analyzeWeatherData(
-            {
-              name: locationName,
-              latitude: latitude,
-              longitude: longitude
-            },
-            currentWeatherData.weather,
-            historical.historical_data
-          );
-          
-          // Format analysis as risk data
-          setRiskData({
-            location_id: `${latitude},${longitude}`,
-            risk_score: analysis.risk_score,
-            disaster_type: analysis.disaster_type,
-            confidence: analysis.confidence,
-            has_risk: analysis.has_risk,
-            ai_explanation: analysis.explanation,
-            recommendations: analysis.recommendations,
-            weather_snapshot: {
-              temperature: currentWeatherData.weather.temperature,
-              pressure: currentWeatherData.weather.pressure,
-              humidity: currentWeatherData.weather.humidity,
-              wind_speed: currentWeatherData.weather.wind_speed,
-              rainfall_24h: currentWeatherData.weather.precipitation,
-              timestamp: currentWeatherData.weather.timestamp
-            }
-          });
-          
-          showMessage(`✓ Analysis complete: ${locationName}`);
-          
+          // Use the main risk assessment endpoint which fetches everything
           const locationId = `${latitude},${longitude}`;
+          const risk = await api.getCurrentRisk(locationId);
+          
+          setRiskData(risk);
           setLocation(locationId);
+          showMessage(`✓ Analysis complete: ${locationName}`);
         } catch (err) {
           showMessage('! Failed to fetch location data: ' + err.message);
           setLocationSearch('');
@@ -250,25 +222,36 @@ const App = () => {
       },
       (error) => {
         let errorMessage = 'Unable to get your location';
+        let suggestion = 'Please use the location search instead.';
+        
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            errorMessage = 'Location permission denied. Please enable location access.';
+            errorMessage = 'Location permission denied';
+            suggestion = 'Enable location access in System Settings > Privacy & Security > Location Services';
             break;
           case error.POSITION_UNAVAILABLE:
-            errorMessage = 'Location information unavailable.';
+            errorMessage = 'Location information unavailable';
+            suggestion = 'Try searching for your city instead (e.g., "Toronto", "New York")';
             break;
           case error.TIMEOUT:
-            errorMessage = 'Location request timed out.';
+            errorMessage = 'Location request timed out';
+            suggestion = 'Please try again or search for your location';
             break;
+          default:
+            errorMessage = 'Location service error';
+            suggestion = 'Use the search box to find your location';
         }
-        showMessage(`! ${errorMessage}`);
+        
+        showMessage(`! ${errorMessage}. ${suggestion}`);
         setLocationSearch('');
+        
+        // Focus on search input as fallback
+        setTimeout(() => {
+          const searchInput = document.querySelector('input[type="text"]');
+          if (searchInput) searchInput.focus();
+        }, 100);
       },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
-      }
+      geoOptions
     );
   };
 
@@ -299,51 +282,16 @@ const App = () => {
     
     // Fetch weather data for the selected location
     try {
-      // Fetch current weather
-      const currentWeatherData = await api.getLocationWeather(locationData.latitude, locationData.longitude);
-      
-      // Fetch historical weather data for last 3 days
-      const historical = await api.getHistoricalWeather(locationData.latitude, locationData.longitude);
-      setHistoricalWeather(historical);
-      console.log('Historical weather data:', historical);
-      
       showMessage(`✓ Analyzing weather data...`);
       
-      // Analyze weather data with Gemini AI for disaster prediction
-      const analysis = await api.analyzeWeatherData(
-        {
-          name: locationData.name,
-          latitude: locationData.latitude,
-          longitude: locationData.longitude
-        },
-        currentWeatherData.weather,
-        historical.historical_data
-      );
+      // Use the main risk assessment endpoint which fetches everything
+      const locationId = `${locationData.latitude},${locationData.longitude}`;
+      const risk = await api.getCurrentRisk(locationId);
       
-      // Format analysis as risk data
-      setRiskData({
-        location_id: analysis.location_id,
-        risk_score: analysis.risk_score,
-        disaster_type: analysis.disaster_type,
-        confidence: analysis.confidence,
-        has_risk: analysis.has_risk,
-        ai_explanation: analysis.explanation,
-        recommendations: analysis.recommendations,
-        weather_snapshot: {
-          temperature: currentWeatherData.weather.temperature,
-          pressure: currentWeatherData.weather.pressure,
-          humidity: currentWeatherData.weather.humidity,
-          wind_speed: currentWeatherData.weather.wind_speed,
-          rainfall_24h: currentWeatherData.weather.precipitation,
-          timestamp: currentWeatherData.weather.timestamp
-        }
-      });
+      setRiskData(risk);
+      setLocation(locationId);
       
       showMessage(`✓ Analysis complete: ${locationData.display_name}`);
-      
-      // Update location ID
-      const locationId = `${locationData.latitude},${locationData.longitude}`;
-      setLocation(locationId);
       
     } catch (err) {
       showMessage('! Failed to analyze weather data: ' + err.message);

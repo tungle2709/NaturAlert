@@ -2,7 +2,7 @@
  * API Service Layer
  * 
  * Provides functions to interact with the Disaster Early Warning System backend API.
- * Base URL: http://localhost:5000
+ * Base URL: http://localhost:8000
  */
 
 const API_BASE_URL = 'http://localhost:8000';
