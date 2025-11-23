@@ -177,195 +177,246 @@ const App = () => {
     }, 300);
   };
 
-  const handleUseCurrentLocation = () => {
-    if (!navigator.geolocation) {
-      showMessage('⚠ Geolocation is not supported by your browser');
-      return;
-    }
-
+  const handleUseCurrentLocation = async () => {
     showMessage('📍 Getting your location...');
     setLocationSearch('Getting your location...');
     setLoading(true);
     
-    // Try multiple geolocation strategies
-    const tryGeolocation = async () => {
-      // Strategy 1: High accuracy with longer timeout
-      const highAccuracyOptions = {
-        enableHighAccuracy: true,
-        timeout: 20000,
-        maximumAge: 600000 // 10 minutes
-      };
-      
-      // Strategy 2: Lower accuracy but faster
-      const lowAccuracyOptions = {
-        enableHighAccuracy: false,
-        timeout: 10000,
-        maximumAge: 600000
-      };
-      
-      const tryWithOptions = (options, strategyName) => {
-        return new Promise((resolve, reject) => {
-          showMessage(`📍 Trying ${strategyName}...`);
-          navigator.geolocation.getCurrentPosition(resolve, reject, options);
-        });
-      };
+    // Strategy 1: Try browser geolocation first
+    const tryBrowserGeolocation = () => {
+      return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error('Geolocation not supported'));
+          return;
+        }
+
+        showMessage('📍 Trying GPS location...');
+        
+        const options = {
+          enableHighAccuracy: false, // Use network location for better compatibility
+          timeout: 8000,             // Shorter timeout
+          maximumAge: 300000         // 5 minutes cache
+        };
+        
+        navigator.geolocation.getCurrentPosition(resolve, reject, options);
+      });
+    };
+
+    // Strategy 2: IP-based location fallback
+    const tryIPLocation = async () => {
+      showMessage('🌐 Trying IP-based location...');
       
       try {
-        // Try high accuracy first
-        const position = await tryWithOptions(highAccuracyOptions, 'high accuracy GPS');
-        return position;
-      } catch (error) {
-        console.log('High accuracy failed, trying low accuracy...', error);
-        try {
-          // Fallback to low accuracy
-          const position = await tryWithOptions(lowAccuracyOptions, 'network-based location');
-          return position;
-        } catch (error2) {
-          throw error2;
+        // Try multiple IP geolocation services
+        const services = [
+          'https://ipapi.co/json/',
+          'https://ip-api.com/json/',
+          'https://ipinfo.io/json'
+        ];
+        
+        for (const service of services) {
+          try {
+            const response = await fetch(service);
+            if (response.ok) {
+              const data = await response.json();
+              
+              // Different services have different field names
+              const latitude = data.latitude || data.lat;
+              const longitude = data.longitude || data.lon || data.lng;
+              const city = data.city;
+              const region = data.region || data.region_name;
+              const country = data.country || data.country_name;
+              
+              if (latitude && longitude) {
+                return {
+                  coords: {
+                    latitude: parseFloat(latitude),
+                    longitude: parseFloat(longitude),
+                    accuracy: 10000 // IP location is less accurate
+                  },
+                  timestamp: Date.now(),
+                  source: 'ip',
+                  locationName: city,
+                  region: region,
+                  country: country
+                };
+              }
+            }
+          } catch (err) {
+            console.log(`IP service ${service} failed:`, err);
+            continue;
+          }
         }
+        throw new Error('All IP location services failed');
+      } catch (error) {
+        throw new Error('IP location unavailable');
       }
     };
-    
-    tryGeolocation()
-      .then(async (position) => {
-        const { latitude, longitude, accuracy } = position.coords;
+
+    // Strategy 3: Default to Toronto as last resort
+    const useDefaultLocation = () => {
+      showMessage('🏙️ Using Toronto as default location...');
+      return {
+        coords: {
+          latitude: 43.6532,
+          longitude: -79.3832,
+          accuracy: 1000
+        },
+        timestamp: Date.now(),
+        source: 'default',
+        locationName: 'Toronto',
+        region: 'Ontario',
+        country: 'Canada'
+      };
+    };
+
+    try {
+      let position;
+      let locationSource = 'gps';
+      
+      try {
+        // Try browser geolocation first
+        position = await tryBrowserGeolocation();
+        showMessage('✅ GPS location found!');
+      } catch (gpsError) {
+        console.log('GPS failed, trying IP location...', gpsError);
         
         try {
-          showMessage(`🌍 Found your location (±${Math.round(accuracy)}m accuracy)`);
+          // Fallback to IP location
+          position = await tryIPLocation();
+          locationSource = 'ip';
+          showMessage('✅ IP location found!');
+        } catch (ipError) {
+          console.log('IP location failed, using default...', ipError);
           
-          // Use reverse geocoding to get location name
+          // Last resort: use Toronto
+          position = useDefaultLocation();
+          locationSource = 'default';
+        }
+      }
+
+      const { latitude, longitude, accuracy } = position.coords;
+      
+      // Get location name
+      let locationName = position.locationName || 'Current Location';
+      let admin1 = position.region || '';
+      let country = position.country || '';
+      
+      // If we don't have a name from IP service, try reverse geocoding
+      if (!locationName || locationName === 'Current Location') {
+        try {
+          showMessage('🌍 Getting location name...');
           const response = await fetch(
             `https://geocoding-api.open-meteo.com/v1/search?latitude=${latitude}&longitude=${longitude}&count=1&language=en&format=json`
           );
-          
-          let locationName = 'Current Location';
-          let admin1 = '';
-          let country = '';
           
           if (response.ok) {
             const data = await response.json();
             if (data.results && data.results.length > 0) {
               const result = data.results[0];
-              locationName = result.name || 'Current Location';
-              admin1 = result.admin1 || '';
-              country = result.country || '';
+              locationName = result.name || locationName;
+              admin1 = result.admin1 || admin1;
+              country = result.country || country;
             }
           }
-          
-          // Create location data object
-          const locationData = {
-            latitude,
-            longitude,
-            name: locationName,
-            admin1: admin1,
-            country: country,
-            display_name: `${locationName}${admin1 ? ', ' + admin1 : ''}${country ? ', ' + country : ''}`
-          };
-          
-          setSelectedLocation(locationData);
-          setLocationSearch(locationData.display_name);
-          
-          // Move globe to current location
-          if (globeInstance.current) {
-            globeInstance.current.pointOfView({
-              lat: latitude,
-              lng: longitude,
-              altitude: 1.5
-            }, 1000);
-            
-            globeInstance.current.htmlElementsData([{
-              lat: latitude,
-              lng: longitude,
-              name: locationData.display_name,
-              size: 0.5,
-              color: '#00ff00'
-            }]);
-          }
-          
-          showMessage(`🔍 Analyzing weather data for ${locationName}...`);
-          
-          // Use the main risk assessment endpoint which fetches everything
-          const locationId = `${latitude},${longitude}`;
-          const risk = await api.getCurrentRisk(locationId);
-          
-          setRiskData(risk);
-          setLocation(locationId);
-          showMessage(`✅ Analysis complete: ${locationName}`);
         } catch (err) {
-          console.error('Location analysis error:', err);
-          showMessage(`⚠ Error analyzing location: ${err.message}`);
-          setLocationSearch('');
-        } finally {
-          setLoading(false);
+          console.log('Reverse geocoding failed:', err);
         }
-      })
-      .catch((error) => {
-        console.error('Geolocation error:', error);
+      }
+      
+      // Create location data object
+      const locationData = {
+        latitude,
+        longitude,
+        name: locationName,
+        admin1: admin1,
+        country: country,
+        display_name: `${locationName}${admin1 ? ', ' + admin1 : ''}${country ? ', ' + country : ''}`
+      };
+      
+      setSelectedLocation(locationData);
+      setLocationSearch(locationData.display_name);
+      
+      // Move globe to current location
+      if (globeInstance.current) {
+        globeInstance.current.pointOfView({
+          lat: latitude,
+          lng: longitude,
+          altitude: 1.5
+        }, 1000);
         
-        let errorMessage = 'Unable to get your location';
-        let suggestion = '';
+        // Color code by location source
+        const markerColor = locationSource === 'gps' ? '#00ff00' : 
+                           locationSource === 'ip' ? '#ffa500' : '#ff6b6b';
         
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            errorMessage = '🚫 Location access denied';
-            suggestion = 'Enable location in browser settings or System Preferences > Security & Privacy > Location Services';
-            break;
-          case error.POSITION_UNAVAILABLE:
-            errorMessage = '📍 Location unavailable';
-            suggestion = 'Your device cannot determine location. Try connecting to WiFi or use manual search';
-            break;
-          case error.TIMEOUT:
-            errorMessage = '⏱ Location timeout';
-            suggestion = 'Location took too long to find. Try again or search manually';
-            break;
-          default:
-            errorMessage = '⚠ Location error';
-            suggestion = 'Unknown location error occurred';
+        globeInstance.current.htmlElementsData([{
+          lat: latitude,
+          lng: longitude,
+          name: locationData.display_name,
+          size: 0.5,
+          color: markerColor
+        }]);
+      }
+      
+      showMessage(`🔍 Analyzing weather data for ${locationName}...`);
+      
+      // Get weather risk assessment
+      const locationId = `${latitude},${longitude}`;
+      const risk = await api.getCurrentRisk(locationId);
+      
+      setRiskData(risk);
+      setLocation(locationId);
+      
+      // Show success message with location source
+      const sourceText = locationSource === 'gps' ? '(GPS)' : 
+                        locationSource === 'ip' ? '(IP location)' : 
+                        '(Default location)';
+      showMessage(`✅ Analysis complete: ${locationName} ${sourceText}`);
+      
+    } catch (err) {
+      console.error('All location methods failed:', err);
+      showMessage('⚠ Unable to determine location. Please search manually.');
+      
+      // Show popular cities as fallback
+      setLocationResults([
+        {
+          name: 'Toronto',
+          latitude: 43.6532,
+          longitude: -79.3832,
+          country: 'Canada',
+          admin1: 'Ontario',
+          display_name: 'Toronto, Ontario, Canada'
+        },
+        {
+          name: 'New York',
+          latitude: 40.7128,
+          longitude: -74.0060,
+          country: 'United States',
+          admin1: 'New York',
+          display_name: 'New York, New York, United States'
+        },
+        {
+          name: 'London',
+          latitude: 51.5074,
+          longitude: -0.1278,
+          country: 'United Kingdom',
+          admin1: 'England',
+          display_name: 'London, England, United Kingdom'
+        },
+        {
+          name: 'Vancouver',
+          latitude: 49.2827,
+          longitude: -123.1207,
+          country: 'Canada',
+          admin1: 'British Columbia',
+          display_name: 'Vancouver, British Columbia, Canada'
         }
-        
-        // Provide helpful alternatives
-        showMessage(`${errorMessage}. ${suggestion}`);
-        
-        // Auto-suggest popular locations as alternatives
-        setTimeout(() => {
-          setLocationResults([
-            {
-              name: 'Toronto',
-              latitude: 43.6532,
-              longitude: -79.3832,
-              country: 'Canada',
-              admin1: 'Ontario',
-              display_name: 'Toronto, Ontario, Canada'
-            },
-            {
-              name: 'New York',
-              latitude: 40.7128,
-              longitude: -74.0060,
-              country: 'United States',
-              admin1: 'New York',
-              display_name: 'New York, New York, United States'
-            },
-            {
-              name: 'London',
-              latitude: 51.5074,
-              longitude: -0.1278,
-              country: 'United Kingdom',
-              admin1: 'England',
-              display_name: 'London, England, United Kingdom'
-            }
-          ]);
-          setShowLocationDropdown(true);
-          setLocationSearch('');
-        }, 2000);
-        
-        setLoading(false);
-        
-        // Focus on search input as fallback
-        setTimeout(() => {
-          const searchInput = document.querySelector('input[type="text"]');
-          if (searchInput) searchInput.focus();
-        }, 100);
-      });
+      ]);
+      setShowLocationDropdown(true);
+      setLocationSearch('');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSelectLocation = async (locationData) => {
