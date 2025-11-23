@@ -6,6 +6,80 @@
 
 Natural disasters claim thousands of lives and cause billions in damage every year. The difference between safety and catastrophe often comes down to minutes of warning. NaturAlert bridges that gap by analyzing weather patterns, historical disaster data, and current conditions to deliver accurate, actionable risk assessments in real-time.
 
+## Data Science for Social Good
+
+NaturAlert exemplifies how data science and machine learning can be powerful forces for positive social impact. By leveraging advanced analytics, predictive modeling, and AI, we're addressing critical challenges that affect millions of people worldwide. Our work directly contributes to four United Nations Sustainable Development Goals:
+
+### SDG 11: Sustainable Cities and Communities
+
+**Making Urban Areas Safer and More Resilient**
+
+Cities are home to over half the world's population and are particularly vulnerable to natural disasters. NaturAlert helps urban planners, emergency managers, and residents make data-driven decisions about disaster preparedness and response.
+
+- **Urban Risk Mapping**: Our ML models identify high-risk urban zones by analyzing historical disaster patterns, population density, and infrastructure vulnerability
+- **Early Warning Systems**: Real-time alerts give city residents crucial minutes or hours to evacuate, secure property, or seek shelter
+- **Infrastructure Planning**: Historical trend analysis helps city planners identify areas requiring improved drainage, flood barriers, or emergency shelters
+- **Community Resilience**: By democratizing access to disaster prediction technology, we empower communities to build their own resilience strategies
+
+Data science enables us to process vast amounts of weather data, satellite imagery, and historical records to create actionable insights that save lives and protect urban infrastructure.
+
+### SDG 13: Climate Action
+
+**Understanding and Responding to Climate Change**
+
+Climate change is intensifying natural disasters worldwide. NaturAlert uses data science to help communities understand, adapt to, and mitigate climate-related risks.
+
+- **Pattern Recognition**: Machine learning algorithms detect long-term climate trends and changing disaster patterns that might not be visible to human analysts
+- **Predictive Analytics**: Our models forecast how climate change will affect disaster frequency and intensity in specific regions
+- **Data-Driven Advocacy**: Historical trend data provides evidence for climate action policies and resource allocation decisions
+- **Carbon-Conscious Design**: Our cloud-based architecture optimizes computational resources to minimize environmental impact while maximizing prediction accuracy
+
+By analyzing decades of climate and disaster data, we help communities prepare for a changing climate and make informed decisions about adaptation strategies.
+
+### SDG 3: Good Health and Well-Being
+
+**Protecting Lives Through Predictive Healthcare**
+
+Natural disasters have profound impacts on public health, from immediate injuries to long-term mental health effects and disease outbreaks. NaturAlert's predictive capabilities help healthcare systems prepare and respond effectively.
+
+- **Preventive Health**: Early warnings allow people with medical conditions to secure medications, evacuate safely, and avoid health emergencies
+- **Healthcare System Preparedness**: Hospitals and clinics can pre-position resources, staff, and supplies based on predicted disaster impacts
+- **Mental Health Support**: Reducing uncertainty through accurate predictions helps minimize anxiety and trauma associated with disasters
+- **Disease Prevention**: Predicting floods and extreme weather helps public health officials prepare for waterborne diseases and other health risks
+
+Our AI assistant provides personalized safety recommendations for vulnerable populations, including elderly individuals, people with disabilities, and those with chronic health conditions.
+
+### SDG 15: Life on Land
+
+**Protecting Ecosystems and Biodiversity**
+
+Natural disasters don't just affect humans—they devastate ecosystems, wildlife habitats, and biodiversity. NaturAlert's predictive capabilities support conservation efforts and ecosystem protection.
+
+- **Wildlife Protection**: Early warnings enable wildlife managers to implement emergency protocols, relocate endangered species, or secure protected areas
+- **Ecosystem Monitoring**: Our global coverage helps track how extreme weather events affect forests, wetlands, and other critical ecosystems
+- **Agricultural Planning**: Farmers can protect crops, livestock, and soil health by preparing for predicted extreme weather events
+- **Reforestation Support**: Historical disaster data helps identify resilient planting locations and optimal times for reforestation projects
+
+By analyzing weather patterns and disaster risks, we help conservationists and land managers make data-driven decisions that protect biodiversity and ecosystem services.
+
+## The Power of Open Data Science
+
+NaturAlert is built on the principle that life-saving technology should be accessible to everyone. We use open-source tools, public datasets, and transparent methodologies to ensure our work can be replicated, improved, and adapted by communities worldwide.
+
+**Our Data Science Approach:**
+
+- **Ethical AI**: Our models are trained on diverse, representative datasets to avoid bias and ensure equitable protection for all communities
+- **Transparency**: We document our methodologies, share our code, and explain our predictions so users can trust and understand our system
+- **Continuous Learning**: Our models improve over time by learning from new data, user feedback, and emerging climate patterns
+- **Collaborative Science**: We welcome contributions from data scientists, climate researchers, and domain experts to improve prediction accuracy
+
+**Impact Through Technology:**
+
+- Analyzing millions of weather data points daily to identify emerging threats
+- Processing historical disaster records spanning decades to understand patterns
+- Leveraging AI to make complex climate science accessible to non-experts
+- Providing free, global coverage so no community is left behind
+
 ## What Makes It Special
 
 **Intelligent Risk Assessment**  
