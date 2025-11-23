@@ -2038,7 +2038,7 @@ async def send_subscription_email(
                         To unsubscribe, visit your account settings or contact support
                     </p>
                     <p style="font-size: 12px; color: #9ca3af; margin: 15px 0 0 0;">
-                        © 2025 Disaster Early Warning System. All rights reserved.
+                        © 2025 Natur Alert. All rights reserved.
                     </p>
                 </div>
             </div>
@@ -2077,7 +2077,7 @@ You will receive alerts when:
 - Risk levels exceed safety thresholds
 
 Stay safe!
-Disaster Early Warning System
+Natur Alert
 """
     
     part1 = MIMEText(text_content, 'plain')
