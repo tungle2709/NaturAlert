@@ -1826,7 +1826,7 @@ async def send_subscription_email(
     risk_color = "#dc2626" if risk_score > 70 else "#f59e0b" if risk_score > 50 else "#10b981"
     
     message = MIMEMultipart('alternative')
-    message['Subject'] = f'✓ Alert Subscription Confirmed - {location_name}'
+    message['Subject'] = f'Alert Subscription Confirmed - {location_name}'
     message['From'] = FROM_EMAIL
     message['To'] = email
     
@@ -1840,11 +1840,10 @@ async def send_subscription_email(
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 </head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f5f5f5;">
-    <div style="max-width: 600px; margin: 20px auto; background-color: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: transparent;">
+    <div style="max-width: 600px; margin: 20px auto; background-color: transparent; border-radius: 12px; overflow: hidden;">
         <!-- Header -->
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center;">
-            <div style="font-size: 48px; margin-bottom: 10px;">🌍</div>
             <h1 style="color: white; margin: 0; font-size: 26px; font-weight: 600;">Alert Subscription Confirmed</h1>
             <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 14px;">{current_date}</p>
         </div>
@@ -1859,14 +1858,14 @@ async def send_subscription_email(
             
             <!-- Location Info -->
             <div style="background-color: #f0f9ff; padding: 20px; border-radius: 8px; margin-bottom: 25px; border-left: 4px solid #3b82f6;">
-                <h3 style="margin: 0 0 10px 0; color: #1e40af; font-size: 18px;">📍 Location Details</h3>
+                <h3 style="margin: 0 0 10px 0; color: #1e40af; font-size: 18px;">Location Details</h3>
                 <p style="margin: 5px 0;"><strong>Name:</strong> {location_name}</p>
                 <p style="margin: 5px 0;"><strong>Coordinates:</strong> {latitude:.4f}, {longitude:.4f}</p>
             </div>
             
             <!-- Current Weather Snapshot -->
             <div style="background-color: #eff6ff; padding: 20px; border-radius: 8px; margin-bottom: 25px; border-left: 4px solid #3b82f6;">
-                <h3 style="margin: 0 0 15px 0; color: #1e40af; font-size: 18px;">🌤️ Current Weather Conditions</h3>
+                <h3 style="margin: 0 0 15px 0; color: #1e40af; font-size: 18px;">Current Weather Conditions</h3>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                     <div style="background: white; padding: 12px; border-radius: 6px;">
                         <div style="font-size: 12px; color: #666;">Temperature</div>
@@ -1907,7 +1906,7 @@ async def send_subscription_email(
             
             <!-- Current Risk Assessment -->
             <div style="background: linear-gradient(135deg, {risk_color}15 0%, {risk_color}05 100%); padding: 25px; border-radius: 12px; margin-bottom: 25px; border: 2px solid {risk_color}40;">
-                <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 20px; font-weight: 600;">⚠️ AI-Powered Risk Assessment</h3>
+                <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 20px; font-weight: 600;">AI-Powered Risk Assessment</h3>
                 <div style="text-align: center; margin-bottom: 20px;">
                     <div style="display: inline-block; background-color: white; padding: 20px 40px; border-radius: 50px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
                         <div style="font-size: 48px; font-weight: bold; color: {risk_color}; line-height: 1;">
@@ -1932,7 +1931,7 @@ async def send_subscription_email(
             
             <!-- AI Analysis & Explanation -->
             <div style="background-color: #fef3c7; padding: 20px; border-radius: 8px; margin-bottom: 25px; border-left: 4px solid #f59e0b;">
-                <h3 style="margin: 0 0 10px 0; color: #92400e; font-size: 18px;">🤖 AI Analysis</h3>
+                <h3 style="margin: 0 0 10px 0; color: #92400e; font-size: 18px;">AI Analysis</h3>
                 <p style="margin: 10px 0; color: #78350f; line-height: 1.6;">{ai_explanation}</p>
                 
                 <div style="margin-top: 15px;">
@@ -1946,14 +1945,14 @@ async def send_subscription_email(
             {f'''
             <!-- Safety Recommendations -->
             <div style="background-color: #fee2e2; padding: 20px; border-radius: 8px; margin-bottom: 25px; border-left: 4px solid #dc2626;">
-                <h3 style="margin: 0 0 10px 0; color: #991b1b; font-size: 18px;">⚠️ Safety Recommendations</h3>
+                <h3 style="margin: 0 0 10px 0; color: #991b1b; font-size: 18px;">Safety Recommendations</h3>
                 <p style="margin: 10px 0; color: #7f1d1d; line-height: 1.6; font-weight: 500;">{recommendation}</p>
             </div>
             ''' if recommendation else ''}
             
             <!-- 3-Day Weather Summary -->
             <div style="background-color: #f0fdf4; padding: 20px; border-radius: 8px; margin-bottom: 25px; border-left: 4px solid #10b981;">
-                <h3 style="margin: 0 0 15px 0; color: #065f46; font-size: 18px;">🌤️ Last 3 Days Weather Summary</h3>
+                <h3 style="margin: 0 0 15px 0; color: #065f46; font-size: 18px;">Last 3 Days Weather Summary</h3>
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
                     <div style="background: white; padding: 12px; border-radius: 6px;">
@@ -2003,7 +2002,7 @@ async def send_subscription_email(
             
             <!-- Alert Conditions -->
             <div style="background-color: #fef2f2; padding: 20px; border-radius: 8px; margin-bottom: 25px; border-left: 4px solid #ef4444;">
-                <h3 style="margin: 0 0 10px 0; color: #991b1b; font-size: 18px;">🔔 You Will Receive Alerts When:</h3>
+                <h3 style="margin: 0 0 10px 0; color: #991b1b; font-size: 18px;">You Will Receive Alerts When:</h3>
                 <ul style="margin: 10px 0; padding-left: 20px; line-height: 1.8;">
                     <li>High risk disasters are predicted for this location</li>
                     <li>Emergency alerts are issued in this area</li>
@@ -2014,7 +2013,7 @@ async def send_subscription_email(
             
             <!-- Safety Tips -->
             <div style="background-color: #eff6ff; padding: 20px; border-radius: 8px; margin-bottom: 25px; border-left: 4px solid #3b82f6;">
-                <h3 style="margin: 0 0 10px 0; color: #1e40af; font-size: 18px;">💡 Safety Tips</h3>
+                <h3 style="margin: 0 0 10px 0; color: #1e40af; font-size: 18px;">Safety Tips</h3>
                 <ul style="margin: 10px 0; padding-left: 20px; line-height: 1.8; color: #374151;">
                     <li>Keep emergency supplies ready (water, food, first aid kit)</li>
                     <li>Have an evacuation plan and know your routes</li>
@@ -2025,9 +2024,6 @@ async def send_subscription_email(
             
             <!-- Footer -->
             <div style="margin-top: 30px; padding: 25px; background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%); border-radius: 8px; text-align: center;">
-                <div style="margin-bottom: 15px;">
-                    <span style="font-size: 32px;">🌍</span>
-                </div>
                 <p style="font-size: 18px; font-weight: 600; color: #1f2937; margin: 0 0 10px 0;">
                     Stay Safe, Stay Informed
                 </p>
