@@ -135,6 +135,107 @@ const App = () => {
     }, 300);
   };
 
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      showMessage('⚠️ Geolocation is not supported by your browser');
+      return;
+    }
+
+    showMessage('📍 Getting your location...');
+    setLocationSearch('Getting your location...');
+    
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        
+        try {
+          // Use reverse geocoding to get location name
+          const response = await fetch(
+            `https://geocoding-api.open-meteo.com/v1/search?latitude=${latitude}&longitude=${longitude}&count=1&language=en&format=json`
+          );
+          
+          let locationName = 'Current Location';
+          let admin1 = '';
+          let country = '';
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.results && data.results.length > 0) {
+              const result = data.results[0];
+              locationName = result.name || 'Current Location';
+              admin1 = result.admin1 || '';
+              country = result.country || '';
+            }
+          }
+          
+          // Create location data object
+          const locationData = {
+            latitude,
+            longitude,
+            name: locationName,
+            admin1: admin1,
+            country: country,
+            display_name: `${locationName}${admin1 ? ', ' + admin1 : ''}${country ? ', ' + country : ''}`
+          };
+          
+          setSelectedLocation(locationData);
+          setLocationSearch(locationData.display_name);
+          
+          // Move globe to current location
+          if (globeInstance.current) {
+            globeInstance.current.pointOfView({
+              lat: latitude,
+              lng: longitude,
+              altitude: 1.5
+            }, 1000);
+            
+            globeInstance.current.pointsData([{
+              lat: latitude,
+              lng: longitude,
+              name: locationData.display_name,
+              size: 0.5,
+              color: '#00ff00'
+            }]);
+          }
+          
+          // Fetch weather data
+          await api.getLocationWeather(latitude, longitude);
+          showMessage(`✅ Using your current location: ${locationName}`);
+          
+          const locationId = `${latitude},${longitude}`;
+          setLocation(locationId);
+          
+          // Automatically fetch risk data for current location
+          await fetchRiskData(locationId);
+        } catch (err) {
+          showMessage('⚠️ Failed to fetch location data: ' + err.message);
+          setLocationSearch('');
+        }
+      },
+      (error) => {
+        let errorMessage = 'Unable to get your location';
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = 'Location permission denied. Please enable location access.';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = 'Location information unavailable.';
+            break;
+          case error.TIMEOUT:
+            errorMessage = 'Location request timed out.';
+            break;
+        }
+        showMessage(`⚠️ ${errorMessage}`);
+        setLocationSearch('');
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+  };
+
   const handleSelectLocation = async (locationData) => {
     setSelectedLocation(locationData);
     setLocationSearch(locationData.display_name);
@@ -161,7 +262,7 @@ const App = () => {
     
     // Fetch weather data for the selected location
     try {
-      const weatherData = await api.getLocationWeather(locationData.latitude, locationData.longitude);
+      await api.getLocationWeather(locationData.latitude, locationData.longitude);
       showMessage(`✅ Selected: ${locationData.display_name}`);
       
       // Update location ID with coordinates for backend
@@ -306,13 +407,28 @@ const App = () => {
                     type="text"
                     value={locationSearch}
                     onChange={(e) => handleLocationSearch(e.target.value)}
-                    onFocus={() => locationResults.length > 0 && setShowLocationDropdown(true)}
+                    onFocus={() => setShowLocationDropdown(true)}
                     placeholder="Search city, country... (e.g., London, Tokyo)"
                     className="w-full px-5 py-3 bg-white/90 backdrop-blur-md border-0 rounded-2xl text-base focus:ring-2 focus:ring-blue-400"
                   />
                   
-                  {showLocationDropdown && locationResults.length > 0 && (
+                  {showLocationDropdown && (
                     <div className="absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-2xl max-h-64 overflow-y-auto">
+                      <button
+                        onClick={() => {
+                          handleUseCurrentLocation();
+                          setShowLocationDropdown(false);
+                        }}
+                        className="w-full text-left px-4 py-3 hover:bg-green-50 border-b border-gray-100 transition bg-green-50/50"
+                      >
+                        <div className="font-semibold text-green-700 flex items-center gap-2">
+                          📍 Use Current Location
+                        </div>
+                        <div className="text-xs text-green-600">
+                          Detect your location automatically
+                        </div>
+                      </button>
+                      
                       {locationResults.map((loc, idx) => (
                         <button
                           key={idx}
@@ -322,7 +438,6 @@ const App = () => {
                           <div className="font-semibold text-gray-800">{loc.name}</div>
                           <div className="text-xs text-gray-500">
                             {loc.admin1 && `${loc.admin1}, `}{loc.country}
-                            {loc.population && ` • Pop: ${loc.population.toLocaleString()}`}
                           </div>
                         </button>
                       ))}
@@ -334,9 +449,11 @@ const App = () => {
                   <div className="bg-blue-500/20 rounded-xl p-3 border border-blue-400/30">
                     <div className="text-white text-sm">
                       <div className="font-semibold">📍 {selectedLocation.name}</div>
-                      <div className="text-xs text-white/70 mt-1">
-                        Lat: {selectedLocation.latitude.toFixed(4)}, Lng: {selectedLocation.longitude.toFixed(4)}
-                      </div>
+                      {selectedLocation.admin1 && selectedLocation.country && (
+                        <div className="text-xs text-white/70 mt-1">
+                          {selectedLocation.admin1}, {selectedLocation.country}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

@@ -111,6 +111,113 @@
             searchTimeout = setTimeout(() => searchLocation(query), 300);
         });
 
+        // Show "Use Current Location" option when input is focused
+        document.getElementById('searchInput').addEventListener('focus', () => {
+            showCurrentLocationOption();
+        });
+
+        // Function to show current location option
+        function showCurrentLocationOption() {
+            const resultsDiv = document.getElementById('results');
+            const currentLocationBtn = document.createElement('div');
+            currentLocationBtn.className = 'result';
+            currentLocationBtn.style.background = 'rgba(16, 185, 129, 0.2)';
+            currentLocationBtn.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+            currentLocationBtn.innerHTML = `
+                <strong style="color: #10b981;">📍 Use Current Location</strong><br>
+                <small style="opacity: 0.8; color: #10b981;">Detect your location automatically</small>
+            `;
+            currentLocationBtn.onclick = useCurrentLocation;
+            
+            resultsDiv.innerHTML = '';
+            resultsDiv.appendChild(currentLocationBtn);
+        }
+
+        // Function to use current location
+        async function useCurrentLocation() {
+            if (!navigator.geolocation) {
+                alert('Geolocation is not supported by your browser');
+                return;
+            }
+
+            document.getElementById('results').innerHTML = '<div class="loading">📍 Getting your location...</div>';
+            document.getElementById('searchInput').value = 'Getting your location...';
+            
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    const { latitude, longitude } = position.coords;
+                    
+                    try {
+                        // Use reverse geocoding to get location name
+                        const response = await fetch(
+                            `https://geocoding-api.open-meteo.com/v1/search?latitude=${latitude}&longitude=${longitude}&count=1&language=en&format=json`
+                        );
+                        
+                        let locationName = 'Current Location';
+                        let admin1 = '';
+                        let country = '';
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data.results && data.results.length > 0) {
+                                const result = data.results[0];
+                                locationName = result.name || 'Current Location';
+                                admin1 = result.admin1 || '';
+                                country = result.country || '';
+                            }
+                        }
+                        
+                        const displayName = `${locationName}${admin1 ? ', ' + admin1 : ''}${country ? ', ' + country : ''}`;
+                        
+                        document.getElementById('results').innerHTML = '';
+                        document.getElementById('searchInput').value = displayName;
+                        
+                        document.getElementById('selected').innerHTML = `
+                            <div class="selected">
+                                <strong>📍 ${locationName}</strong><br>
+                                <small>${admin1}${admin1 && country ? ', ' : ''}${country}</small>
+                            </div>
+                        `;
+                        
+                        // Move globe to current location
+                        globe.pointOfView({
+                            lat: latitude,
+                            lng: longitude,
+                            altitude: 1.5
+                        }, 1500);
+                        
+                        // Add green marker for current location
+                        globe.pointsData([{
+                            lat: latitude,
+                            lng: longitude,
+                            name: displayName,
+                            color: '#00ff00'
+                        }]);
+                    } catch (error) {
+                        console.error('Reverse geocoding error:', error);
+                        document.getElementById('results').innerHTML = `<div style="color: #ff6b6b;">Error getting location name</div>`;
+                        document.getElementById('searchInput').value = '';
+                    }
+                },
+                (error) => {
+                    let errorMessage = 'Unable to get your location';
+                    switch (error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMessage = 'Location permission denied';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage = 'Location unavailable';
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage = 'Location request timed out';
+                            break;
+                    }
+                    document.getElementById('results').innerHTML = `<div style="color: #ff6b6b;">${errorMessage}</div>`;
+                    document.getElementById('searchInput').value = '';
+                }
+            );
+        }
+
         // Search for locations using Open-Meteo Geocoding API
         async function searchLocation(query) {
             const resultsDiv = document.getElementById('results');
@@ -135,7 +242,7 @@
                         div.className = 'result';
                         div.innerHTML = `
                             <strong>${location.name}</strong><br>
-                            <small style="opacity: 0.8;">${displayName}</small>
+                            <small style="opacity: 0.8;">${location.admin1 ? location.admin1 + ', ' : ''}${location.country}</small>
                         `;
                         div.onclick = () => selectLocation(location, displayName);
                         resultsDiv.appendChild(div);
@@ -160,7 +267,6 @@
                 <div class="selected">
                     <strong>📍 ${displayName}</strong><br>
                     <small>Lat: ${location.latitude.toFixed(4)}, Lng: ${location.longitude.toFixed(4)}</small>
-                    ${location.population ? `<br><small>Population: ${location.population.toLocaleString()}</small>` : ''}
                 </div>
             `;
             
