@@ -5,7 +5,7 @@
  * Base URL: http://localhost:8000
  */
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'http://localhost:5000';
 
 /**
  * Generic fetch wrapper with error handling
@@ -346,6 +346,47 @@ export async function getHistoricalWeather(latitude, longitude) {
 }
 
 // ============================================================================
+// Alert Subscription API
+// ============================================================================
+
+/**
+ * Subscribe to disaster alerts for a specific location
+ * @param {Object} subscription - Subscription data
+ * @param {string} subscription.email - User email address
+ * @param {string} subscription.location_name - Location name
+ * @param {number} subscription.latitude - Latitude coordinate
+ * @param {number} subscription.longitude - Longitude coordinate
+ * @param {string} subscription.sms - Optional SMS number
+ * @returns {Promise<Object>} Subscription confirmation with weather analysis
+ */
+export async function subscribeToAlerts(subscription) {
+  return apiFetch('/api/v1/alerts/subscribe', {
+    method: 'POST',
+    body: JSON.stringify(subscription),
+  });
+}
+
+/**
+ * Get all alert subscriptions for a user
+ * @param {string} email - User email address
+ * @returns {Promise<Object>} List of subscriptions
+ */
+export async function getUserSubscriptions(email) {
+  return apiFetch(`/api/v1/alerts/subscriptions?email=${encodeURIComponent(email)}`);
+}
+
+/**
+ * Unsubscribe from alerts
+ * @param {number} subscriptionId - Subscription ID to cancel
+ * @returns {Promise<Object>} Unsubscribe confirmation
+ */
+export async function unsubscribeFromAlerts(subscriptionId) {
+  return apiFetch(`/api/v1/alerts/unsubscribe/${subscriptionId}`, {
+    method: 'DELETE',
+  });
+}
+
+// ============================================================================
 // Health Check
 // ============================================================================
 
@@ -392,6 +433,11 @@ export default {
   searchLocation,
   getLocationWeather,
   getHistoricalWeather,
+  
+  // Alert Subscriptions
+  subscribeToAlerts,
+  getUserSubscriptions,
+  unsubscribeFromAlerts,
   
   // Health
   checkHealth,

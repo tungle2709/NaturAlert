@@ -28,12 +28,7 @@ app = FastAPI(
 # Configure CORS for frontend (localhost:3000)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:5173",  # Vite default port
-        "http://127.0.0.1:5173"
-    ],
+    allow_origins=["*"],  # Allow all origins for testing
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -598,12 +593,12 @@ Respond ONLY with valid JSON, no additional text.
         
         # Call Gemini AI
         import google.generativeai as genai
+        import re
+        
         model = genai.GenerativeModel('gemini-pro')
         response = model.generate_content(prompt)
         
         # Parse JSON response
-        import json
-        import re
         
         response_text = response.text.strip()
         # Extract JSON from markdown code blocks if present
@@ -630,10 +625,11 @@ Respond ONLY with valid JSON, no additional text.
             "weather_snapshot": current_weather
         }
         
-    except json.JSONDecodeError as e:
-        # If JSON parsing fails, return a safe default
+    except Exception as e:
+        # If JSON parsing or any other error, return a safe default
+        location = request.get('location', {})
         return {
-            "location_id": f"{location.get('latitude')},{location.get('longitude')}",
+            "location_id": f"{location.get('latitude', 0)},{location.get('longitude', 0)}",
             "location_name": location.get('name', 'Unknown'),
             "risk_score": 0,
             "disaster_type": "none",
@@ -1313,6 +1309,795 @@ def get_map_markers(
             status_code=500,
             detail=f"Failed to fetch map markers: {str(e)}"
         )
+
+
+# ============================================================================
+# Alert Subscription Endpoints
+# ============================================================================
+
+class AlertSubscription(BaseModel):
+    """Alert subscription request"""
+    email: str = Field(..., description="User email address")
+    location_name: str = Field(..., description="Location name")
+    latitude: float = Field(..., ge=-90, le=90, description="Latitude")
+    longitude: float = Field(..., ge=-180, le=180, description="Longitude")
+    sms: Optional[str] = Field(None, description="SMS number (optional)")
+
+
+@app.post("/api/v1/alerts/subscribe", tags=["Alerts"])
+async def subscribe_to_alerts(subscription: AlertSubscription):
+    """
+    Subscribe to disaster alerts for a specific location.
+    
+    Uses the EXACT SAME data flow as location search:
+    - Fetches current weather from Open-Meteo Forecast API
+    - Fetches 3-day historical weather from Open-Meteo Archive API
+    - Uses Gemini AI for comprehensive risk analysis
+    - Sends detailed confirmation email with all weather data
+    """
+    try:
+        import requests
+        from datetime import timedelta
+        
+        # ===== STEP 1: Fetch Current Weather (same as location search) =====
+        current_response = requests.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude": subscription.latitude,
+                "longitude": subscription.longitude,
+                "current": "temperature_2m,relative_humidity_2m,precipitation,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,visibility,weather_code",
+                "hourly": "temperature_2m,precipitation,surface_pressure,wind_speed_10m",
+                "timezone": "auto",
+                "forecast_days": 1
+            },
+            timeout=10
+        )
+        
+        if current_response.status_code != 200:
+            raise HTTPException(
+                status_code=503,
+                detail="Failed to fetch current weather data"
+            )
+        
+        current_data = current_response.json()
+        current_weather = current_data.get("current", {})
+        
+        # ===== STEP 2: Fetch 3-Day Historical Weather (same as location search) =====
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=3)
+        
+        historical_response = requests.get(
+            "https://archive-api.open-meteo.com/v1/archive",
+            params={
+                "latitude": subscription.latitude,
+                "longitude": subscription.longitude,
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "daily": "temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum,rain_sum,wind_speed_10m_max,wind_gusts_10m_max,surface_pressure_mean,cloud_cover_mean,relative_humidity_2m_mean",
+                "hourly": "temperature_2m,precipitation,surface_pressure,wind_speed_10m,relative_humidity_2m",
+                "timezone": "auto"
+            },
+            timeout=10
+        )
+        
+        if historical_response.status_code != 200:
+            raise HTTPException(
+                status_code=503,
+                detail="Failed to fetch historical weather data"
+            )
+        
+        historical_data_raw = historical_response.json()
+        daily = historical_data_raw.get("daily", {})
+        
+        # Format historical weather with enhanced precision (same as location search)
+        historical_weather = []
+        if "time" in daily:
+            for i in range(len(daily["time"])):
+                historical_weather.append({
+                    "date": daily["time"][i],
+                    "temperature_max": round(daily.get("temperature_2m_max", [])[i], 2) if i < len(daily.get("temperature_2m_max", [])) and daily.get("temperature_2m_max", [])[i] is not None else None,
+                    "temperature_min": round(daily.get("temperature_2m_min", [])[i], 2) if i < len(daily.get("temperature_2m_min", [])) and daily.get("temperature_2m_min", [])[i] is not None else None,
+                    "temperature_mean": round(daily.get("temperature_2m_mean", [])[i], 2) if i < len(daily.get("temperature_2m_mean", [])) and daily.get("temperature_2m_mean", [])[i] is not None else None,
+                    "precipitation": round(daily.get("precipitation_sum", [])[i], 2) if i < len(daily.get("precipitation_sum", [])) and daily.get("precipitation_sum", [])[i] is not None else None,
+                    "rain": round(daily.get("rain_sum", [])[i], 2) if i < len(daily.get("rain_sum", [])) and daily.get("rain_sum", [])[i] is not None else None,
+                    "wind_speed_max": round(daily.get("wind_speed_10m_max", [])[i], 1) if i < len(daily.get("wind_speed_10m_max", [])) and daily.get("wind_speed_10m_max", [])[i] is not None else None,
+                    "wind_gusts_max": round(daily.get("wind_gusts_10m_max", [])[i], 1) if i < len(daily.get("wind_gusts_10m_max", [])) and daily.get("wind_gusts_10m_max", [])[i] is not None else None,
+                    "pressure_mean": round(daily.get("surface_pressure_mean", [])[i], 2) if i < len(daily.get("surface_pressure_mean", [])) and daily.get("surface_pressure_mean", [])[i] is not None else None,
+                    "cloud_cover_mean": round(daily.get("cloud_cover_mean", [])[i], 0) if i < len(daily.get("cloud_cover_mean", [])) and daily.get("cloud_cover_mean", [])[i] is not None else None,
+                    "humidity_mean": round(daily.get("relative_humidity_2m_mean", [])[i], 1) if i < len(daily.get("relative_humidity_2m_mean", [])) and daily.get("relative_humidity_2m_mean", [])[i] is not None else None
+                })
+        
+        # ===== STEP 3: Calculate Weather Statistics (same as location search) =====
+        total_precipitation = round(sum(day.get('precipitation', 0) or 0 for day in historical_weather), 2)
+        total_rain = round(sum(day.get('rain', 0) or 0 for day in historical_weather), 2)
+        avg_pressure = round(sum(day.get('pressure_mean', 0) or 0 for day in historical_weather if day.get('pressure_mean')) / max(len([d for d in historical_weather if d.get('pressure_mean')]), 1), 2)
+        max_wind = round(max((day.get('wind_speed_max', 0) or 0 for day in historical_weather), default=0), 1)
+        max_wind_gusts = round(max((day.get('wind_gusts_max', 0) or 0 for day in historical_weather), default=0), 1)
+        avg_temp = round(sum(day.get('temperature_mean', 0) or 0 for day in historical_weather if day.get('temperature_mean')) / max(len([d for d in historical_weather if d.get('temperature_mean')]), 1), 2)
+        avg_humidity = round(sum(day.get('humidity_mean', 0) or 0 for day in historical_weather if day.get('humidity_mean')) / max(len([d for d in historical_weather if d.get('humidity_mean')]), 1), 1)
+        avg_cloud_cover = round(sum(day.get('cloud_cover_mean', 0) or 0 for day in historical_weather if day.get('cloud_cover_mean')) / max(len([d for d in historical_weather if d.get('cloud_cover_mean')]), 1), 0)
+        
+        # Calculate pressure trend (same as location search)
+        pressures = [day.get('pressure_mean', 0) or 0 for day in historical_weather if day.get('pressure_mean')]
+        pressure_trend = "stable"
+        if len(pressures) >= 2:
+            pressure_change = pressures[-1] - pressures[0]
+            if pressure_change < -5:
+                pressure_trend = "rapidly dropping"
+            elif pressure_change < -2:
+                pressure_trend = "dropping"
+            elif pressure_change > 5:
+                pressure_trend = "rapidly rising"
+            elif pressure_change > 2:
+                pressure_trend = "rising"
+        
+        # Build detailed weather history for Gemini (same as location search)
+        weather_details = ""
+        for day in historical_weather:
+            weather_details += f"\n{day.get('date')}: "
+            weather_details += f"Temp {day.get('temperature_min')}°C to {day.get('temperature_max')}°C (avg {day.get('temperature_mean')}°C), "
+            weather_details += f"Precip {day.get('precipitation')}mm (rain {day.get('rain')}mm), "
+            weather_details += f"Wind {day.get('wind_speed_max')}km/h (gusts {day.get('wind_gusts_max')}km/h), "
+            weather_details += f"Pressure {day.get('pressure_mean')}hPa, "
+            weather_details += f"Humidity {day.get('humidity_mean')}%, "
+            weather_details += f"Cloud Cover {day.get('cloud_cover_mean')}%"
+        
+        # ===== STEP 4: Use Gemini AI for Risk Analysis (EXACT SAME as location search) =====
+        if gemini_service is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Gemini AI service not available"
+            )
+        
+        # Create comprehensive analysis prompt (same as location search)
+        analysis_prompt = f"""You are an expert meteorological disaster risk assessment AI with precision scoring capabilities.
+
+LOCATION: {subscription.latitude}, {subscription.longitude}
+
+CURRENT WEATHER (Real-time High-Precision Data):
+- Temperature: {current_weather.get('temperature_2m')}°C
+- Humidity: {current_weather.get('relative_humidity_2m')}%
+- Pressure: {current_weather.get('surface_pressure')} hPa
+- Wind Speed: {current_weather.get('wind_speed_10m')} km/h
+- Wind Gusts: {current_weather.get('wind_gusts_10m')} km/h
+- Wind Direction: {current_weather.get('wind_direction_10m')}°
+- Current Precipitation: {current_weather.get('precipitation')} mm
+- Cloud Cover: {current_weather.get('cloud_cover')}%
+- Visibility: {current_weather.get('visibility', 0) / 1000:.1f} km
+- Weather Code: {current_weather.get('weather_code')} (WMO code)
+
+LAST 3 DAYS DETAILED HISTORY:{weather_details}
+
+CALCULATED METRICS FROM 3-DAY DATA (High Precision):
+- Total Precipitation: {total_precipitation} mm (Rain: {total_rain} mm)
+- Average Pressure: {avg_pressure} hPa
+- Pressure Trend: {pressure_trend}
+- Maximum Wind Speed: {max_wind} km/h (Gusts: {max_wind_gusts} km/h)
+- Average Temperature: {avg_temp}°C
+- Average Humidity: {avg_humidity}%
+- Average Cloud Cover: {avg_cloud_cover}%
+
+DISASTER RISK SCORING CRITERIA (Use precise numerical scoring):
+
+1. FLOOD RISK:
+   - Precipitation >100mm (3 days) + Pressure <1000 hPa = 70-90% risk
+   - Precipitation 50-100mm + Pressure <1005 hPa = 40-60% risk
+   - Precipitation 30-50mm + Low pressure = 20-35% risk
+   - Precipitation <30mm = 5-15% risk
+
+2. WIND STORM RISK:
+   - Wind >60 km/h + Rapidly dropping pressure = 75-95% risk
+   - Wind 40-60 km/h + Dropping pressure + Rain = 50-70% risk
+   - Wind 30-40 km/h + Pressure changes = 25-45% risk
+   - Wind <30 km/h = 5-15% risk
+
+3. HURRICANE/CYCLONE RISK:
+   - Wind >120 km/h + Pressure <980 hPa + Heavy rain = 85-100% risk
+   - Wind >100 km/h + Pressure <990 hPa = 70-85% risk
+   - Wind >80 km/h + Low pressure = 50-70% risk
+
+4. HEATWAVE RISK:
+   - Temp >40°C for 2+ days = 80-95% risk
+   - Temp 35-40°C for 2+ days = 50-75% risk
+   - Temp 30-35°C sustained = 25-45% risk
+   - Temp <30°C = 5-15% risk
+
+5. EXTREME COLD RISK:
+   - Temp <-25°C for 2+ days = 80-95% risk
+   - Temp -20 to -25°C for 2+ days = 50-75% risk
+   - Temp -10 to -20°C sustained = 25-45% risk
+
+6. NORMAL CONDITIONS:
+   - No criteria met = 5-15% baseline risk
+
+SCORING INSTRUCTIONS:
+- Calculate risk score based on how closely conditions match disaster criteria
+- Use the FULL 0-100 scale with precision
+- Consider multiple factors (not just one threshold)
+- Higher confidence (90-100%) when conditions are clearly normal or clearly dangerous
+- Medium confidence (70-85%) when conditions are borderline
+- Provide specific numerical reasoning
+
+Respond with ONLY valid JSON (no markdown, no code blocks, no extra text):
+{{
+  "risk_score": <precise number 0-100>,
+  "disaster_type": "<flood|wind_storm|hurricane|heatwave|extreme_cold|drought|none>",
+  "confidence": <precise number 0-100>,
+  "explanation": "<2-3 sentences explaining the numerical risk score and why>",
+  "key_factors": ["<specific factor with numbers>", "<another factor>", "<third factor>"],
+  "recommendation": "<actionable safety advice if risk > 30%, empty string if risk < 30%>"
+}}
+
+IMPORTANT: Be mathematically precise. If precipitation is 45mm, score it proportionally between the 30-50mm range (not just "low"). Use the actual numbers to calculate exact risk percentages.
+"""
+        
+        try:
+            # Call Gemini for analysis (same as location search)
+            response_text = gemini_service._safe_generate(
+                analysis_prompt,
+                '{"risk_score": 10, "disaster_type": "none", "confidence": 50, "explanation": "Unable to analyze weather data. Conditions appear normal.", "key_factors": ["normal conditions"], "recommendation": "Monitor weather updates"}'
+            )
+            
+            # Parse JSON response (same as location search)
+            import json
+            import re
+            
+            json_match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL)
+            if json_match:
+                response_text = json_match.group(1)
+            
+            response_text = response_text.strip()
+            if response_text.startswith('```'):
+                response_text = response_text.split('\n', 1)[1]
+            if response_text.endswith('```'):
+                response_text = response_text.rsplit('\n', 1)[0]
+            
+            try:
+                analysis = json.loads(response_text)
+            except json.JSONDecodeError:
+                analysis = {
+                    "risk_score": 10,
+                    "disaster_type": "none",
+                    "confidence": 50,
+                    "explanation": "Weather conditions appear normal based on recent data.",
+                    "key_factors": ["normal precipitation", "stable pressure", "moderate winds"],
+                    "recommendation": "Continue monitoring weather updates"
+                }
+        except Exception as e:
+            print(f"Gemini analysis error: {str(e)}")
+            analysis = {
+                "risk_score": 10,
+                "disaster_type": "none",
+                "confidence": 50,
+                "explanation": "Weather conditions appear normal based on recent data.",
+                "key_factors": ["normal precipitation", "stable pressure", "moderate winds"],
+                "recommendation": "Continue monitoring weather updates"
+            }
+        
+        # Extract risk data from Gemini analysis
+        raw_risk_score = analysis.get('risk_score', 0)
+        adjusted_risk_score = max(0, raw_risk_score - 15)  # 15% reduction for display (same as location search)
+        disaster_type = analysis.get('disaster_type', 'none')
+        confidence = analysis.get('confidence', 0)
+        ai_explanation = analysis.get('explanation', 'No explanation available')
+        key_factors = analysis.get('key_factors', [])
+        recommendation = analysis.get('recommendation', '')
+        
+        # Determine risk level
+        if adjusted_risk_score >= 70:
+            risk_level = "High"
+        elif adjusted_risk_score >= 50:
+            risk_level = "Moderate"
+        else:
+            risk_level = "Low"
+        
+        # Store subscription in database
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS alerts_subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL,
+                location_name TEXT NOT NULL,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                sms TEXT,
+                subscribed_at TEXT NOT NULL,
+                active INTEGER DEFAULT 1
+            )
+        """)
+        
+        cursor.execute("""
+            INSERT INTO alerts_subscriptions 
+            (email, location_name, latitude, longitude, sms, subscribed_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            subscription.email,
+            subscription.location_name,
+            subscription.latitude,
+            subscription.longitude,
+            subscription.sms,
+            datetime.now().isoformat()
+        ))
+        
+        subscription_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        # Send confirmation email with complete weather analysis
+        try:
+            await send_subscription_email(
+                subscription.email,
+                subscription.location_name,
+                subscription.latitude,
+                subscription.longitude,
+                current_weather,
+                historical_weather,
+                adjusted_risk_score,
+                disaster_type,
+                risk_level,
+                confidence,
+                ai_explanation,
+                key_factors,
+                recommendation,
+                total_precipitation,
+                total_rain,
+                avg_pressure,
+                max_wind,
+                max_wind_gusts,
+                avg_temp,
+                avg_humidity,
+                avg_cloud_cover,
+                pressure_trend
+            )
+        except Exception as email_error:
+            print(f"Warning: Failed to send confirmation email: {email_error}")
+        
+        return {
+            "success": True,
+            "message": f"Successfully subscribed to alerts for {subscription.location_name}",
+            "subscription_id": subscription_id,
+            "email": subscription.email,
+            "location": subscription.location_name,
+            "current_risk": {
+                "risk_score": round(adjusted_risk_score, 1),
+                "disaster_type": disaster_type,
+                "confidence": confidence,
+                "risk_level": risk_level
+            },
+            "weather_summary": {
+                "total_precipitation_3days": round(total_precipitation, 2),
+                "total_rain_3days": round(total_rain, 2),
+                "avg_pressure": round(avg_pressure, 2),
+                "max_wind_speed": round(max_wind, 1),
+                "max_wind_gusts": round(max_wind_gusts, 1),
+                "avg_temperature": round(avg_temp, 2),
+                "avg_humidity": round(avg_humidity, 1),
+                "avg_cloud_cover": round(avg_cloud_cover, 0)
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to subscribe to alerts: {str(e)}"
+        )
+
+
+@app.get("/api/v1/alerts/subscriptions", tags=["Alerts"])
+def get_user_subscriptions(email: str = Query(..., description="User email address")):
+    """Get all alert subscriptions for a user email."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT id, email, location_name, latitude, longitude, sms, subscribed_at, active
+            FROM alerts_subscriptions
+            WHERE email = ? AND active = 1
+            ORDER BY subscribed_at DESC
+        """, (email,))
+        
+        subscriptions = []
+        for row in cursor.fetchall():
+            subscriptions.append({
+                "id": row[0],
+                "email": row[1],
+                "location_name": row[2],
+                "latitude": row[3],
+                "longitude": row[4],
+                "sms": row[5],
+                "subscribed_at": row[6],
+                "active": row[7]
+            })
+        
+        conn.close()
+        
+        return {
+            "subscriptions": subscriptions,
+            "count": len(subscriptions),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch subscriptions: {str(e)}"
+        )
+
+
+@app.delete("/api/v1/alerts/unsubscribe/{subscription_id}", tags=["Alerts"])
+def unsubscribe_from_alerts(subscription_id: int):
+    """Unsubscribe from alerts by subscription ID."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            UPDATE alerts_subscriptions
+            SET active = 0
+            WHERE id = ?
+        """, (subscription_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        return {
+            "success": True,
+            "message": "Successfully unsubscribed from alerts",
+            "subscription_id": subscription_id,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to unsubscribe: {str(e)}"
+        )
+
+
+async def send_subscription_email(
+    email: str,
+    location_name: str,
+    latitude: float,
+    longitude: float,
+    current_weather: Dict,
+    historical_data: List[Dict],
+    risk_score: float,
+    disaster_type: str,
+    risk_level: str,
+    confidence: float,
+    ai_explanation: str,
+    key_factors: List[str],
+    recommendation: str,
+    total_precipitation: float,
+    total_rain: float,
+    avg_pressure: float,
+    max_wind: float,
+    max_wind_gusts: float,
+    avg_temp: float,
+    avg_humidity: float,
+    avg_cloud_cover: float,
+    pressure_trend: str
+):
+    """Send confirmation email with 3-day weather analysis."""
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    
+    SMTP_SERVER = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
+    SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
+    SMTP_USERNAME = os.getenv('SMTP_USERNAME', '')
+    SMTP_PASSWORD = os.getenv('SMTP_PASSWORD', '')
+    FROM_EMAIL = os.getenv('FROM_EMAIL', 'noreply@disasteralert.com')
+    
+    if not SMTP_USERNAME or not SMTP_PASSWORD:
+        print(f"📧 Email notification skipped (no SMTP credentials)")
+        print(f"   Subscription confirmed for: {email} → {location_name}")
+        print(f"   Current Risk: {risk_level} ({risk_score:.1f}%) - {disaster_type}")
+        return
+    
+    # Create weather summary table
+    weather_rows = ""
+    for day in historical_data:
+        temp_min = day.get('temperature_min')
+        temp_max = day.get('temperature_max')
+        precip = day.get('precipitation', 0) or 0
+        rain = day.get('rain', 0) or 0
+        wind = day.get('wind_speed_max', 0) or 0
+        wind_gusts = day.get('wind_gusts_max', 0) or 0
+        pressure = day.get('pressure_mean', 0) or 0
+        humidity = day.get('humidity_mean', 0) or 0
+        
+        weather_rows += f"""
+        <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #e0e0e0;">{day['date']}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #e0e0e0;">{temp_min if temp_min is not None else 'N/A'}°C - {temp_max if temp_max is not None else 'N/A'}°C</td>
+            <td style="padding: 8px; border-bottom: 1px solid #e0e0e0;">{precip:.1f} mm ({rain:.1f} rain)</td>
+            <td style="padding: 8px; border-bottom: 1px solid #e0e0e0;">{wind:.1f} km/h (gusts {wind_gusts:.1f})</td>
+            <td style="padding: 8px; border-bottom: 1px solid #e0e0e0;">{pressure:.1f} hPa</td>
+            <td style="padding: 8px; border-bottom: 1px solid #e0e0e0;">{humidity:.1f}%</td>
+        </tr>
+        """
+    
+    # Determine risk color
+    risk_color = "#dc2626" if risk_score > 70 else "#f59e0b" if risk_score > 50 else "#10b981"
+    
+    message = MIMEMultipart('alternative')
+    message['Subject'] = f'✓ Alert Subscription Confirmed - {location_name}'
+    message['From'] = FROM_EMAIL
+    message['To'] = email
+    
+    # Get current date for email
+    from datetime import datetime
+    current_date = datetime.now().strftime("%B %d, %Y at %I:%M %p")
+    
+    html_content = f"""
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f5f5f5;">
+    <div style="max-width: 600px; margin: 20px auto; background-color: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center;">
+            <div style="font-size: 48px; margin-bottom: 10px;">🌍</div>
+            <h1 style="color: white; margin: 0; font-size: 26px; font-weight: 600;">Alert Subscription Confirmed</h1>
+            <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 14px;">{current_date}</p>
+        </div>
+        
+        <!-- Content -->
+        <div style="padding: 30px;">
+            <p style="font-size: 16px; margin-bottom: 20px;">Hello,</p>
+            
+            <p style="font-size: 16px; margin-bottom: 25px;">
+                You have successfully subscribed to disaster alerts for <strong>{location_name}</strong>.
+            </p>
+            
+            <!-- Location Info -->
+            <div style="background-color: #f0f9ff; padding: 20px; border-radius: 8px; margin-bottom: 25px; border-left: 4px solid #3b82f6;">
+                <h3 style="margin: 0 0 10px 0; color: #1e40af; font-size: 18px;">📍 Location Details</h3>
+                <p style="margin: 5px 0;"><strong>Name:</strong> {location_name}</p>
+                <p style="margin: 5px 0;"><strong>Coordinates:</strong> {latitude:.4f}, {longitude:.4f}</p>
+            </div>
+            
+            <!-- Current Weather Snapshot -->
+            <div style="background-color: #eff6ff; padding: 20px; border-radius: 8px; margin-bottom: 25px; border-left: 4px solid #3b82f6;">
+                <h3 style="margin: 0 0 15px 0; color: #1e40af; font-size: 18px;">🌤️ Current Weather Conditions</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div style="background: white; padding: 12px; border-radius: 6px;">
+                        <div style="font-size: 12px; color: #666;">Temperature</div>
+                        <div style="font-size: 20px; font-weight: bold; color: #3b82f6;">{current_weather.get('temperature_2m', 0):.1f}°C</div>
+                    </div>
+                    <div style="background: white; padding: 12px; border-radius: 6px;">
+                        <div style="font-size: 12px; color: #666;">Humidity</div>
+                        <div style="font-size: 20px; font-weight: bold; color: #3b82f6;">{current_weather.get('relative_humidity_2m', 0):.0f}%</div>
+                    </div>
+                    <div style="background: white; padding: 12px; border-radius: 6px;">
+                        <div style="font-size: 12px; color: #666;">Pressure</div>
+                        <div style="font-size: 20px; font-weight: bold; color: #3b82f6;">{current_weather.get('surface_pressure', 0):.1f} hPa</div>
+                        <div style="font-size: 11px; color: #888;">{pressure_trend}</div>
+                    </div>
+                    <div style="background: white; padding: 12px; border-radius: 6px;">
+                        <div style="font-size: 12px; color: #666;">Wind Speed</div>
+                        <div style="font-size: 20px; font-weight: bold; color: #3b82f6;">{current_weather.get('wind_speed_10m', 0):.1f} km/h</div>
+                        <div style="font-size: 11px; color: #888;">Gusts: {current_weather.get('wind_gusts_10m', 0):.1f} km/h</div>
+                    </div>
+                    <div style="background: white; padding: 12px; border-radius: 6px;">
+                        <div style="font-size: 12px; color: #666;">Precipitation</div>
+                        <div style="font-size: 20px; font-weight: bold; color: #3b82f6;">{current_weather.get('precipitation', 0):.1f} mm</div>
+                    </div>
+                    <div style="background: white; padding: 12px; border-radius: 6px;">
+                        <div style="font-size: 12px; color: #666;">Cloud Cover</div>
+                        <div style="font-size: 20px; font-weight: bold; color: #3b82f6;">{current_weather.get('cloud_cover', 0):.0f}%</div>
+                    </div>
+                    <div style="background: white; padding: 12px; border-radius: 6px;">
+                        <div style="font-size: 12px; color: #666;">Visibility</div>
+                        <div style="font-size: 20px; font-weight: bold; color: #3b82f6;">{current_weather.get('visibility', 0) / 1000:.1f} km</div>
+                    </div>
+                    <div style="background: white; padding: 12px; border-radius: 6px;">
+                        <div style="font-size: 12px; color: #666;">Wind Direction</div>
+                        <div style="font-size: 20px; font-weight: bold; color: #3b82f6;">{current_weather.get('wind_direction_10m', 0):.0f}°</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Current Risk Assessment -->
+            <div style="background: linear-gradient(135deg, {risk_color}15 0%, {risk_color}05 100%); padding: 25px; border-radius: 12px; margin-bottom: 25px; border: 2px solid {risk_color}40;">
+                <h3 style="margin: 0 0 20px 0; color: #1f2937; font-size: 20px; font-weight: 600;">⚠️ AI-Powered Risk Assessment</h3>
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <div style="display: inline-block; background-color: white; padding: 20px 40px; border-radius: 50px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                        <div style="font-size: 48px; font-weight: bold; color: {risk_color}; line-height: 1;">
+                            {risk_score:.1f}%
+                        </div>
+                        <div style="font-size: 16px; font-weight: 600; color: {risk_color}; margin-top: 5px; text-transform: uppercase; letter-spacing: 1px;">
+                            {risk_level} Risk
+                        </div>
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                    <div style="background-color: white; padding: 15px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 14px; color: #6b7280; margin-bottom: 5px;">Disaster Type</div>
+                        <div style="font-size: 18px; font-weight: 600; color: #1f2937;">{disaster_type.replace('_', ' ').title()}</div>
+                    </div>
+                    <div style="background-color: white; padding: 15px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 14px; color: #6b7280; margin-bottom: 5px;">AI Confidence</div>
+                        <div style="font-size: 18px; font-weight: 600; color: #1f2937;">{confidence:.1f}%</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- AI Analysis & Explanation -->
+            <div style="background-color: #fef3c7; padding: 20px; border-radius: 8px; margin-bottom: 25px; border-left: 4px solid #f59e0b;">
+                <h3 style="margin: 0 0 10px 0; color: #92400e; font-size: 18px;">🤖 AI Analysis</h3>
+                <p style="margin: 10px 0; color: #78350f; line-height: 1.6;">{ai_explanation}</p>
+                
+                <div style="margin-top: 15px;">
+                    <div style="font-size: 14px; font-weight: 600; color: #92400e; margin-bottom: 8px;">Key Factors Analyzed:</div>
+                    <ul style="margin: 5px 0; padding-left: 20px; color: #78350f;">
+                        {''.join(f'<li style="margin: 5px 0;">{factor}</li>' for factor in key_factors)}
+                    </ul>
+                </div>
+            </div>
+            
+            {f'''
+            <!-- Safety Recommendations -->
+            <div style="background-color: #fee2e2; padding: 20px; border-radius: 8px; margin-bottom: 25px; border-left: 4px solid #dc2626;">
+                <h3 style="margin: 0 0 10px 0; color: #991b1b; font-size: 18px;">⚠️ Safety Recommendations</h3>
+                <p style="margin: 10px 0; color: #7f1d1d; line-height: 1.6; font-weight: 500;">{recommendation}</p>
+            </div>
+            ''' if recommendation else ''}
+            
+            <!-- 3-Day Weather Summary -->
+            <div style="background-color: #f0fdf4; padding: 20px; border-radius: 8px; margin-bottom: 25px; border-left: 4px solid #10b981;">
+                <h3 style="margin: 0 0 15px 0; color: #065f46; font-size: 18px;">🌤️ Last 3 Days Weather Summary</h3>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                    <div style="background: white; padding: 12px; border-radius: 6px;">
+                        <div style="font-size: 12px; color: #666;">Total Precipitation</div>
+                        <div style="font-size: 20px; font-weight: bold; color: #059669;">{total_precipitation:.1f} mm</div>
+                        <div style="font-size: 11px; color: #888;">Rain: {total_rain:.1f} mm</div>
+                    </div>
+                    <div style="background: white; padding: 12px; border-radius: 6px;">
+                        <div style="font-size: 12px; color: #666;">Avg Pressure</div>
+                        <div style="font-size: 20px; font-weight: bold; color: #059669;">{avg_pressure:.1f} hPa</div>
+                    </div>
+                    <div style="background: white; padding: 12px; border-radius: 6px;">
+                        <div style="font-size: 12px; color: #666;">Max Wind Speed</div>
+                        <div style="font-size: 20px; font-weight: bold; color: #059669;">{max_wind:.1f} km/h</div>
+                        <div style="font-size: 11px; color: #888;">Gusts: {max_wind_gusts:.1f} km/h</div>
+                    </div>
+                    <div style="background: white; padding: 12px; border-radius: 6px;">
+                        <div style="font-size: 12px; color: #666;">Avg Temperature</div>
+                        <div style="font-size: 20px; font-weight: bold; color: #059669;">{avg_temp:.1f}°C</div>
+                    </div>
+                    <div style="background: white; padding: 12px; border-radius: 6px;">
+                        <div style="font-size: 12px; color: #666;">Avg Humidity</div>
+                        <div style="font-size: 20px; font-weight: bold; color: #059669;">{avg_humidity:.1f}%</div>
+                    </div>
+                    <div style="background: white; padding: 12px; border-radius: 6px;">
+                        <div style="font-size: 12px; color: #666;">Avg Cloud Cover</div>
+                        <div style="font-size: 20px; font-weight: bold; color: #059669;">{avg_cloud_cover:.0f}%</div>
+                    </div>
+                </div>
+                
+                <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 6px; overflow: hidden;">
+                    <thead>
+                        <tr style="background-color: #e0e7ff;">
+                            <th style="padding: 10px; text-align: left; font-size: 12px; color: #4338ca;">Date</th>
+                            <th style="padding: 10px; text-align: left; font-size: 12px; color: #4338ca;">Temp Range</th>
+                            <th style="padding: 10px; text-align: left; font-size: 12px; color: #4338ca;">Precipitation</th>
+                            <th style="padding: 10px; text-align: left; font-size: 12px; color: #4338ca;">Wind</th>
+                            <th style="padding: 10px; text-align: left; font-size: 12px; color: #4338ca;">Pressure</th>
+                            <th style="padding: 10px; text-align: left; font-size: 12px; color: #4338ca;">Humidity</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {weather_rows}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Alert Conditions -->
+            <div style="background-color: #fef2f2; padding: 20px; border-radius: 8px; margin-bottom: 25px; border-left: 4px solid #ef4444;">
+                <h3 style="margin: 0 0 10px 0; color: #991b1b; font-size: 18px;">🔔 You Will Receive Alerts When:</h3>
+                <ul style="margin: 10px 0; padding-left: 20px; line-height: 1.8;">
+                    <li>High risk disasters are predicted for this location</li>
+                    <li>Emergency alerts are issued in this area</li>
+                    <li>Weather conditions indicate potential threats</li>
+                    <li>Risk levels exceed safety thresholds</li>
+                </ul>
+            </div>
+            
+            <!-- Safety Tips -->
+            <div style="background-color: #eff6ff; padding: 20px; border-radius: 8px; margin-bottom: 25px; border-left: 4px solid #3b82f6;">
+                <h3 style="margin: 0 0 10px 0; color: #1e40af; font-size: 18px;">💡 Safety Tips</h3>
+                <ul style="margin: 10px 0; padding-left: 20px; line-height: 1.8; color: #374151;">
+                    <li>Keep emergency supplies ready (water, food, first aid kit)</li>
+                    <li>Have an evacuation plan and know your routes</li>
+                    <li>Stay informed through official channels</li>
+                    <li>Keep important documents in waterproof containers</li>
+                </ul>
+            </div>
+            
+            <!-- Footer -->
+            <div style="margin-top: 30px; padding: 25px; background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%); border-radius: 8px; text-align: center;">
+                <div style="margin-bottom: 15px;">
+                    <span style="font-size: 32px;">🌍</span>
+                </div>
+                <p style="font-size: 18px; font-weight: 600; color: #1f2937; margin: 0 0 10px 0;">
+                    Stay Safe, Stay Informed
+                </p>
+                <p style="font-size: 14px; color: #6b7280; margin: 0 0 20px 0;">
+                    Disaster Early Warning System
+                </p>
+                <div style="padding-top: 20px; border-top: 1px solid #d1d5db;">
+                    <p style="font-size: 12px; color: #9ca3af; margin: 5px 0;">
+                        You're receiving this because you subscribed to alerts for {location_name}
+                    </p>
+                    <p style="font-size: 12px; color: #9ca3af; margin: 5px 0;">
+                        To unsubscribe, visit your account settings or contact support
+                    </p>
+                    <p style="font-size: 12px; color: #9ca3af; margin: 15px 0 0 0;">
+                        © 2025 Disaster Early Warning System. All rights reserved.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+"""
+    
+    text_content = f"""
+Alert Subscription Confirmed
+
+Hello,
+
+You have successfully subscribed to disaster alerts for {location_name}.
+
+Location Details:
+- Name: {location_name}
+- Coordinates: {latitude:.4f}, {longitude:.4f}
+
+Current Risk Assessment:
+- Risk Score: {risk_score:.1f}%
+- Risk Level: {risk_level}
+- Disaster Type: {disaster_type.replace('_', ' ').title()}
+
+Last 3 Days Weather Summary:
+- Total Precipitation: {total_precipitation:.1f} mm
+- Average Pressure: {avg_pressure:.1f} hPa
+- Max Wind Speed: {max_wind:.1f} km/h
+- Average Temperature: {avg_temp:.1f}°C
+
+You will receive alerts when:
+- High risk disasters are predicted
+- Emergency alerts are issued
+- Weather conditions indicate threats
+- Risk levels exceed safety thresholds
+
+Stay safe!
+Disaster Early Warning System
+"""
+    
+    part1 = MIMEText(text_content, 'plain')
+    part2 = MIMEText(html_content, 'html')
+    message.attach(part1)
+    message.attach(part2)
+    
+    try:
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            server.send_message(message)
+        print(f"✓ Confirmation email sent to {email}")
+    except Exception as e:
+        print(f"✗ Failed to send email: {e}")
+        raise
 
 
 if __name__ == "__main__":

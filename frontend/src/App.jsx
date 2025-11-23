@@ -324,14 +324,28 @@ const App = () => {
   };
 
   const handleAlertSubscribe = async () => {
-    if (!user || !email) return;
-    const db = getFirestore();
-    await addDoc(collection(db, `artifacts/${window.__app_id}/public/data/alerts_subscription_queue`), {
-      email, sms, location, status: 'PENDING', timestamp: Date.now()
-    });
-    showMessage(`Successfully subscribed to alerts for ${location}!`);
-    setEmail('');
-    setSms('');
+    if (!email || !selectedLocation) {
+      showMessage('! Please enter email and select a location');
+      return;
+    }
+    
+    try {
+      const response = await api.subscribeToAlerts({
+        email: email,
+        location_name: selectedLocation.display_name,
+        latitude: selectedLocation.latitude,
+        longitude: selectedLocation.longitude,
+        sms: sms || null
+      });
+      
+      showMessage(`✓ Successfully subscribed to alerts for ${selectedLocation.name}! Check your email for weather analysis.`);
+      setEmail('');
+      setSms('');
+      setSelectedLocation(null);
+      setLocationSearch('');
+    } catch (err) {
+      showMessage(`! Failed to subscribe: ${err.message}`);
+    }
   };
 
   const handleSOS = async () => {
@@ -535,7 +549,7 @@ const App = () => {
                         className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-200 transition-all rounded-t-[20px]"
                       >
                         <div className="font-semibold text-gray-900 flex items-center gap-2">
-                          &gt; Use Current Location
+                           Use Current Location
                         </div>
                         <div className="text-xs text-gray-600">
                           Detect your location automatically
@@ -691,9 +705,54 @@ const App = () => {
 
         {page === 'alerts' && (
           <div className="fixed left-6 top-24 w-96">
-            <div className="bg-white/5 backdrop-blur-3xl rounded-[28px] p-6 border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
-              <h2 className="text-xl font-semibold mb-4 text-white/95">Subscribe to Alerts</h2>
+            <div className="bg-black/40 backdrop-blur-2xl rounded-3xl p-6 border border-white/20 shadow-2xl">
+              <h2 className="text-2xl font-bold mb-4 text-white">Subscribe to Alerts</h2>
               <div className="space-y-3">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={locationSearch}
+                    onChange={(e) => handleLocationSearch(e.target.value)}
+                    onFocus={() => setShowLocationDropdown(true)}
+                    placeholder="Search location for alerts..."
+                    className="w-full px-5 py-3 bg-white/90 backdrop-blur-md border-0 rounded-2xl text-base focus:ring-2 focus:ring-blue-400"
+                  />
+                  
+                  {showLocationDropdown && locationResults.length > 0 && (
+                    <div className="absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-2xl max-h-64 overflow-y-auto">
+                      {locationResults.map((loc, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => {
+                            setSelectedLocation(loc);
+                            setLocationSearch(loc.display_name);
+                            setShowLocationDropdown(false);
+                          }}
+                          className="w-full text-left px-4 py-3 hover:bg-blue-50 border-b border-gray-100 last:border-b-0 transition"
+                        >
+                          <div className="font-semibold text-gray-800">{loc.name}</div>
+                          <div className="text-xs text-gray-500">
+                            {loc.admin1 && `${loc.admin1}, `}{loc.country}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                {selectedLocation && (
+                  <div className="bg-blue-500/20 rounded-xl p-3 border border-blue-400/30">
+                    <div className="text-white text-sm">
+                      <div className="font-semibold">📍 {selectedLocation.name}</div>
+                      {selectedLocation.admin1 && selectedLocation.country && (
+                        <div className="text-xs text-white/70 mt-1">
+                          {selectedLocation.admin1}, {selectedLocation.country}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
                 <input
                   type="email"
                   value={email}
@@ -708,7 +767,7 @@ const App = () => {
                   placeholder="SMS (optional)"
                   className="w-full px-5 py-3.5 bg-white/10 backdrop-blur-2xl border border-white/20 rounded-[18px] text-white placeholder-white/60 text-sm focus:outline-none focus:ring-2 focus:ring-white/30"
                 />
-                <button onClick={handleAlertSubscribe} className="w-full py-3.5 bg-white/10 backdrop-blur-2xl border border-white/20 text-white rounded-[18px] hover:bg-white/15 font-semibold shadow-[0_4px_16px_rgba(0,0,0,0.08)] transition-all">Subscribe</button>
+                <button onClick={handleAlertSubscribe} className="w-full py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-2xl hover:from-blue-600 hover:to-purple-700 font-semibold shadow-lg">Subscribe</button>
               </div>
             </div>
           </div>
