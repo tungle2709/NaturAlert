@@ -6,6 +6,38 @@
 
 Natural disasters claim thousands of lives and cause billions in damage every year. The difference between safety and catastrophe often comes down to minutes of warning. NaturAlert bridges that gap by analyzing weather patterns, historical disaster data, and current conditions to deliver accurate, actionable risk assessments in real-time.
 
+## Screenshots
+
+### Main Dashboard - Risk Assessment
+![Main Dashboard](images/Screenshot%202025-11-23%20at%2016.19.08.png)
+
+The main dashboard provides instant risk assessment for any location worldwide. Enter a city name or coordinates, and our machine learning model analyzes current weather conditions against historical disaster patterns. The interface displays a comprehensive risk score (0-100), real-time weather metrics including temperature, precipitation, wind speed, humidity, and pressure. Color-coded risk indicators make it easy to understand threat levels at a glance.
+
+### Interactive 3D Globe Visualization
+![3D Globe](images/Screenshot%202025-11-23%20at%2016.30.08.png)
+
+Explore global weather patterns on our stunning 3D interactive globe. Rotate, zoom, and click on any region to see real-time weather conditions and disaster risk levels. The globe visualization helps you understand weather systems, track storms, and identify high-risk zones across the planet. Perfect for monitoring multiple locations or understanding regional weather patterns.
+
+### AI Chat Assistant
+![AI Chat](images/Screenshot%202025-11-23%20at%2016.30.25.png)
+
+Get personalized guidance from our Google Gemini-powered AI assistant. Ask questions about weather risks, disaster preparedness, or specific locations. The AI provides intelligent, context-aware responses that help you understand complex weather phenomena and make informed decisions about safety. Whether you need evacuation advice or want to learn about historical disaster patterns, the AI assistant is here to help.
+
+### Historical Trends Analysis
+![Trends Analysis](images/Screenshot%202025-11-23%20at%2016.30.38.png)
+
+Track how disaster risk evolves over time with our historical trends feature. View risk score changes across days, weeks, or months to identify patterns and seasonal variations. This feature helps you understand long-term climate trends, plan travel during safer periods, and make data-driven decisions about location-based activities.
+
+### Emergency SOS Alert System
+![SOS System](images/Screenshot%202025-11-23%20at%2016.31.42.png)
+
+When disaster strikes, every second counts. Our SOS alert system lets you broadcast emergency alerts with your exact location. View nearby alerts from others in your area, coordinate with emergency responders, and help those in need. The system uses real-time geolocation to ensure accurate positioning and quick response times.
+
+### Location Search & Analysis
+![Location Search](images/Screenshot%202025-11-23%20at%2016.31.58.png)
+
+Search any location on Earth with our powerful location search feature. Type city names, addresses, or coordinates to get instant risk assessments. The system provides detailed weather data, historical disaster context, and AI-generated safety recommendations for your searched location. Save favorite locations for quick access and monitor multiple areas simultaneously.
+
 ## What Makes It Special
 
 **Intelligent Risk Assessment**  
