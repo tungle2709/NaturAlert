@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geolocation Diagnostic Tool</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .info-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .warning { background: #fff3cd; color: #856404; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 5px;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .result {
+            background: #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .fix-section {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Geolocation Diagnostic Tool</h1>
+        
+        <div class="info-section">
+            <h3>System Information</h3>
+            <div id="systemInfo"></div>
+        </div>
+
+        <div class="info-section">
+            <h3>Geolocation Support Check</h3>
+            <div id="geoSupport"></div>
+        </div>
+
+        <div class="info-section">
+            <h3>Permission Status</h3>
+            <div id="permissionStatus"></div>
+            <button onclick="checkPermissions()">Check Permissions</button>
+        </div>
+
+        <div class="info-section">
+            <h3>Location Tests</h3>
+            <button onclick="testHighAccuracy()">Test High Accuracy</button>
+            <button onclick="testLowAccuracy()">Test Low Accuracy</button>
+            <button onclick="testCachedLocation()">Test Cached Location</button>
+            <div id="locationResults" class="result" style="display: none;"></div>
+        </div>
+
+        <div class="fix-section">
+            <h3>🛠 Common Fixes for macOS</h3>
+            <ol>
+                <li><strong>System Preferences:</strong> Go to System Preferences > Security & Privacy > Privacy > Location Services</li>
+                <li><strong>Enable Location Services:</strong> Make sure "Enable Location Services" is checked</li>
+                <li><strong>Browser Permissions:</strong> Find your browser (Safari, Chrome, Firefox) and enable location access</li>
+                <li><strong>Website Permissions:</strong> In browser settings, allow location access for localhost</li>
+                <li><strong>WiFi Connection:</strong> Connect to WiFi for better location accuracy</li>
+                <li><strong>Restart Browser:</strong> Close and reopen your browser after changing settings</li>
+            </ol>
+        </div>
+
+        <div class="info-section">
+            <h3>Alternative Solutions</h3>
+            <p>If geolocation still doesn't work, you can:</p>
+            <ul>
+                <li>Use the search box to find your city (e.g., "Toronto", "New York")</li>
+                <li>Enter coordinates manually in the format: latitude,longitude</li>
+                <li>Use a popular city as a test location</li>
+            </ul>
+            <button onclick="showPopularCities()">Show Popular Cities</button>
+            <div id="popularCities" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        // Display system information
+        function displaySystemInfo() {
+            const info = {
+                'User Agent': navigator.userAgent,
+                'Platform': navigator.platform,
+                'Language': navigator.language,
+                'Online': navigator.onLine,
+                'Cookies Enabled': navigator.cookieEnabled,
+                'Protocol': window.location.protocol,
+                'Host': window.location.host
+            };
+
+            let html = '';
+            for (const [key, value] of Object.entries(info)) {
+                html += `<div><strong>${key}:</strong> ${value}</div>`;
+            }
+            document.getElementById('systemInfo').innerHTML = html;
+        }
+
+        // Check geolocation support
+        function checkGeolocationSupport() {
+            const supportDiv = document.getElementById('geoSupport');
+            
+            if ('geolocation' in navigator) {
+                supportDiv.innerHTML = '<div class="status success">✅ Geolocation is supported</div>';
+            } else {
+                supportDiv.innerHTML = '<div class="status error">❌ Geolocation is not supported</div>';
+            }
+        }
+
+        // Check permissions
+        async function checkPermissions() {
+            const statusDiv = document.getElementById('permissionStatus');
+            
+            try {
+                if ('permissions' in navigator) {
+                    const permission = await navigator.permissions.query({name: 'geolocation'});
+                    
+                    let statusClass = '';
+                    let statusText = '';
+                    
+                    switch (permission.state) {
+                        case 'granted':
+                            statusClass = 'success';
+                            statusText = '✅ Location permission granted';
+                            break;
+                        case 'denied':
+                            statusClass = 'error';
+                            statusText = '❌ Location permission denied';
+                            break;
+                        case 'prompt':
+                            statusClass = 'warning';
+                            statusText = '⚠️ Location permission will be requested';
+                            break;
+                        default:
+                            statusClass = 'info';
+                            statusText = `ℹ️ Permission state: ${permission.state}`;
+                    }
+                    
+                    statusDiv.innerHTML = `<div class="status ${statusClass}">${statusText}</div>`;
+                } else {
+                    statusDiv.innerHTML = '<div class="status warning">⚠️ Permissions API not supported</div>';
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status error">❌ Error checking permissions: ${error.message}</div>`;
+            }
+        }
+
+        // Test high accuracy geolocation
+        function testHighAccuracy() {
+            showResult('Testing high accuracy geolocation...');
+            
+            const options = {
+                enableHighAccuracy: true,
+                timeout: 20000,
+                maximumAge: 0
+            };
+            
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const result = `✅ High accuracy success!
+Latitude: ${position.coords.latitude}
+Longitude: ${position.coords.longitude}
+Accuracy: ${position.coords.accuracy} meters
+Altitude: ${position.coords.altitude || 'N/A'}
+Speed: ${position.coords.speed || 'N/A'}
+Heading: ${position.coords.heading || 'N/A'}
+Timestamp: ${new Date(position.timestamp).toLocaleString()}`;
+                    showResult(result);
+                },
+                (error) => {
+                    const result = `❌ High accuracy failed
+Error Code: ${error.code}
+Error Message: ${error.message}
+PERMISSION_DENIED = 1
+POSITION_UNAVAILABLE = 2  
+TIMEOUT = 3`;
+                    showResult(result);
+                },
+                options
+            );
+        }
+
+        // Test low accuracy geolocation
+        function testLowAccuracy() {
+            showResult('Testing low accuracy geolocation...');
+            
+            const options = {
+                enableHighAccuracy: false,
+                timeout: 10000,
+                maximumAge: 300000
+            };
+            
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const result = `✅ Low accuracy success!
+Latitude: ${position.coords.latitude}
+Longitude: ${position.coords.longitude}
+Accuracy: ${position.coords.accuracy} meters
+Timestamp: ${new Date(position.timestamp).toLocaleString()}`;
+                    showResult(result);
+                },
+                (error) => {
+                    const result = `❌ Low accuracy failed
+Error Code: ${error.code}
+Error Message: ${error.message}`;
+                    showResult(result);
+                },
+                options
+            );
+        }
+
+        // Test cached location
+        function testCachedLocation() {
+            showResult('Testing cached location...');
+            
+            const options = {
+                enableHighAccuracy: false,
+                timeout: 5000,
+                maximumAge: 600000 // 10 minutes
+            };
+            
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const result = `✅ Cached location success!
+Latitude: ${position.coords.latitude}
+Longitude: ${position.coords.longitude}
+Accuracy: ${position.coords.accuracy} meters
+Timestamp: ${new Date(position.timestamp).toLocaleString()}
+Age: ${Date.now() - position.timestamp}ms`;
+                    showResult(result);
+                },
+                (error) => {
+                    const result = `❌ Cached location failed
+Error Code: ${error.code}
+Error Message: ${error.message}`;
+                    showResult(result);
+                },
+                options
+            );
+        }
+
+        // Show result
+        function showResult(text) {
+            const resultDiv = document.getElementById('locationResults');
+            resultDiv.textContent = text;
+            resultDiv.style.display = 'block';
+        }
+
+        // Show popular cities
+        function showPopularCities() {
+            const cities = [
+                { name: 'Toronto, Canada', coords: '43.6532,-79.3832' },
+                { name: 'New York, USA', coords: '40.7128,-74.0060' },
+                { name: 'London, UK', coords: '51.5074,-0.1278' },
+                { name: 'Tokyo, Japan', coords: '35.6762,139.6503' },
+                { name: 'Sydney, Australia', coords: '-33.8688,151.2093' },
+                { name: 'Paris, France', coords: '48.8566,2.3522' },
+                { name: 'Berlin, Germany', coords: '52.5200,13.4050' },
+                { name: 'Los Angeles, USA', coords: '34.0522,-118.2437' }
+            ];
+
+            let html = '<h4>Popular Cities (click to copy coordinates):</h4>';
+            cities.forEach(city => {
+                html += `<div style="margin: 5px 0; padding: 10px; background: #f8f9fa; border-radius: 5px; cursor: pointer;" onclick="copyToClipboard('${city.coords}')">
+                    <strong>${city.name}</strong><br>
+                    <small>${city.coords}</small>
+                </div>`;
+            });
+
+            document.getElementById('popularCities').innerHTML = html;
+            document.getElementById('popularCities').style.display = 'block';
+        }
+
+        // Copy to clipboard
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert(`Copied to clipboard: ${text}\nYou can paste this in the location search box.`);
+            });
+        }
+
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            displaySystemInfo();
+            checkGeolocationSupport();
+            checkPermissions();
+        });
+    </script>
+</body>
+</html>

@@ -187,19 +187,51 @@ const App = () => {
     setLocationSearch('Getting your location...');
     setLoading(true);
     
-    // Enhanced geolocation options
-    const geoOptions = {
-      enableHighAccuracy: true,  // Use GPS if available
-      timeout: 15000,            // 15 second timeout (increased)
-      maximumAge: 300000         // Accept cached position up to 5 minutes old
+    // Try multiple geolocation strategies
+    const tryGeolocation = async () => {
+      // Strategy 1: High accuracy with longer timeout
+      const highAccuracyOptions = {
+        enableHighAccuracy: true,
+        timeout: 20000,
+        maximumAge: 600000 // 10 minutes
+      };
+      
+      // Strategy 2: Lower accuracy but faster
+      const lowAccuracyOptions = {
+        enableHighAccuracy: false,
+        timeout: 10000,
+        maximumAge: 600000
+      };
+      
+      const tryWithOptions = (options, strategyName) => {
+        return new Promise((resolve, reject) => {
+          showMessage(`📍 Trying ${strategyName}...`);
+          navigator.geolocation.getCurrentPosition(resolve, reject, options);
+        });
+      };
+      
+      try {
+        // Try high accuracy first
+        const position = await tryWithOptions(highAccuracyOptions, 'high accuracy GPS');
+        return position;
+      } catch (error) {
+        console.log('High accuracy failed, trying low accuracy...', error);
+        try {
+          // Fallback to low accuracy
+          const position = await tryWithOptions(lowAccuracyOptions, 'network-based location');
+          return position;
+        } catch (error2) {
+          throw error2;
+        }
+      }
     };
     
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
+    tryGeolocation()
+      .then(async (position) => {
+        const { latitude, longitude, accuracy } = position.coords;
         
         try {
-          showMessage('🌍 Found your location, getting weather data...');
+          showMessage(`🌍 Found your location (±${Math.round(accuracy)}m accuracy)`);
           
           // Use reverse geocoding to get location name
           const response = await fetch(
@@ -266,31 +298,66 @@ const App = () => {
         } finally {
           setLoading(false);
         }
-      },
-      (error) => {
+      })
+      .catch((error) => {
+        console.error('Geolocation error:', error);
+        
         let errorMessage = 'Unable to get your location';
-        let suggestion = 'Please use the location search instead.';
+        let suggestion = '';
         
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            errorMessage = '🚫 Location permission denied';
-            suggestion = 'Please enable location access in your browser settings';
+            errorMessage = '🚫 Location access denied';
+            suggestion = 'Enable location in browser settings or System Preferences > Security & Privacy > Location Services';
             break;
           case error.POSITION_UNAVAILABLE:
-            errorMessage = '📍 Location information unavailable';
-            suggestion = 'Try searching for your city instead (e.g., "Toronto", "New York")';
+            errorMessage = '📍 Location unavailable';
+            suggestion = 'Your device cannot determine location. Try connecting to WiFi or use manual search';
             break;
           case error.TIMEOUT:
-            errorMessage = '⏱ Location request timed out';
-            suggestion = 'Please try again or search for your location manually';
+            errorMessage = '⏱ Location timeout';
+            suggestion = 'Location took too long to find. Try again or search manually';
             break;
           default:
-            errorMessage = '⚠ Location service error';
-            suggestion = 'Use the search box to find your location';
+            errorMessage = '⚠ Location error';
+            suggestion = 'Unknown location error occurred';
         }
         
+        // Provide helpful alternatives
         showMessage(`${errorMessage}. ${suggestion}`);
-        setLocationSearch('');
+        
+        // Auto-suggest popular locations as alternatives
+        setTimeout(() => {
+          setLocationResults([
+            {
+              name: 'Toronto',
+              latitude: 43.6532,
+              longitude: -79.3832,
+              country: 'Canada',
+              admin1: 'Ontario',
+              display_name: 'Toronto, Ontario, Canada'
+            },
+            {
+              name: 'New York',
+              latitude: 40.7128,
+              longitude: -74.0060,
+              country: 'United States',
+              admin1: 'New York',
+              display_name: 'New York, New York, United States'
+            },
+            {
+              name: 'London',
+              latitude: 51.5074,
+              longitude: -0.1278,
+              country: 'United Kingdom',
+              admin1: 'England',
+              display_name: 'London, England, United Kingdom'
+            }
+          ]);
+          setShowLocationDropdown(true);
+          setLocationSearch('');
+        }, 2000);
+        
         setLoading(false);
         
         // Focus on search input as fallback
@@ -298,9 +365,7 @@ const App = () => {
           const searchInput = document.querySelector('input[type="text"]');
           if (searchInput) searchInput.focus();
         }, 100);
-      },
-      geoOptions
-    );
+      });
   };
 
   const handleSelectLocation = async (locationData) => {
