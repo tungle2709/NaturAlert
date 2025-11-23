@@ -1,0 +1,206 @@
+{
+  "binary_model": {
+    "model_type": "RandomForestClassifier",
+    "parameters": {
+      "bootstrap": true,
+      "ccp_alpha": 0.0,
+      "class_weight": "balanced",
+      "criterion": "gini",
+      "max_depth": 5,
+      "max_features": "sqrt",
+      "max_leaf_nodes": null,
+      "max_samples": null,
+      "min_impurity_decrease": 0.0,
+      "min_samples_leaf": 2,
+      "min_samples_split": 10,
+      "min_weight_fraction_leaf": 0.0,
+      "monotonic_cst": null,
+      "n_estimators": 100,
+      "n_jobs": -1,
+      "oob_score": false,
+      "random_state": 42,
+      "verbose": 0,
+      "warm_start": false
+    },
+    "features": [
+      "temperature",
+      "pressure",
+      "wind_speed",
+      "humidity",
+      "pressure_drop_7d",
+      "wind_spike_max",
+      "humidity_trend",
+      "temp_deviation",
+      "pressure_velocity",
+      "wind_gust_ratio"
+    ],
+    "train_performance": {
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "roc_auc": 1.0
+    },
+    "test_performance": {
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "roc_auc": 1.0
+    },
+    "feature_importance": [
+      {
+        "feature": "wind_speed",
+        "importance": 0.3558225642055952,
+        "cumulative_importance": 0.3558225642055952
+      },
+      {
+        "feature": "wind_spike_max",
+        "importance": 0.28619318045555414,
+        "cumulative_importance": 0.6420157446611494
+      },
+      {
+        "feature": "pressure",
+        "importance": 0.13706356112738644,
+        "cumulative_importance": 0.7790793057885359
+      },
+      {
+        "feature": "wind_gust_ratio",
+        "importance": 0.13151370440429494,
+        "cumulative_importance": 0.9105930101928308
+      },
+      {
+        "feature": "pressure_drop_7d",
+        "importance": 0.03842433692327762,
+        "cumulative_importance": 0.9490173471161084
+      },
+      {
+        "feature": "pressure_velocity",
+        "importance": 0.02466398096229377,
+        "cumulative_importance": 0.9736813280784021
+      },
+      {
+        "feature": "humidity",
+        "importance": 0.015417147797736265,
+        "cumulative_importance": 0.9890984758761384
+      },
+      {
+        "feature": "temperature",
+        "importance": 0.006088635540031597,
+        "cumulative_importance": 0.99518711141617
+      },
+      {
+        "feature": "temp_deviation",
+        "importance": 0.003882426459235218,
+        "cumulative_importance": 0.9990695378754052
+      },
+      {
+        "feature": "humidity_trend",
+        "importance": 0.0009304621245948785,
+        "cumulative_importance": 1.0
+      }
+    ],
+    "model_version": "1.0.0"
+  },
+  "feature_scaler": {
+    "scaler_type": "StandardScaler",
+    "feature_names": [
+      "temperature",
+      "pressure",
+      "wind_speed",
+      "humidity",
+      "pressure_drop_7d",
+      "wind_spike_max",
+      "humidity_trend",
+      "temp_deviation",
+      "pressure_velocity",
+      "wind_gust_ratio"
+    ]
+  },
+  "multiclass_model": {
+    "model_type": "GradientBoostingClassifier",
+    "parameters": {
+      "ccp_alpha": 0.0,
+      "criterion": "friedman_mse",
+      "init": null,
+      "learning_rate": 0.1,
+      "loss": "log_loss",
+      "max_depth": 5,
+      "max_features": null,
+      "max_leaf_nodes": null,
+      "min_impurity_decrease": 0.0,
+      "min_samples_leaf": 1,
+      "min_samples_split": 2,
+      "min_weight_fraction_leaf": 0.0,
+      "n_estimators": 100,
+      "n_iter_no_change": null,
+      "random_state": 42,
+      "subsample": 1.0,
+      "tol": 0.0001,
+      "validation_fraction": 0.1,
+      "verbose": 0,
+      "warm_start": false
+    },
+    "classes": [
+      "extreme_weather",
+      "storm"
+    ],
+    "training_samples": 34,
+    "test_samples": 15,
+    "accuracy": 1.0,
+    "features": [
+      "temperature",
+      "pressure",
+      "wind_speed",
+      "humidity",
+      "pressure_drop_7d",
+      "wind_spike_max",
+      "humidity_trend",
+      "temp_deviation",
+      "pressure_velocity",
+      "wind_gust_ratio"
+    ],
+    "feature_importance": [
+      {
+        "feature": "temp_deviation",
+        "importance": 1.0
+      },
+      {
+        "feature": "temperature",
+        "importance": 0.0
+      },
+      {
+        "feature": "pressure",
+        "importance": 0.0
+      },
+      {
+        "feature": "wind_speed",
+        "importance": 0.0
+      },
+      {
+        "feature": "humidity",
+        "importance": 0.0
+      },
+      {
+        "feature": "pressure_drop_7d",
+        "importance": 0.0
+      },
+      {
+        "feature": "wind_spike_max",
+        "importance": 0.0
+      },
+      {
+        "feature": "humidity_trend",
+        "importance": 0.0
+      },
+      {
+        "feature": "pressure_velocity",
+        "importance": 0.0
+      },
+      {
+        "feature": "wind_gust_ratio",
+        "importance": 0.0
+      }
+    ]
+  }
+}
