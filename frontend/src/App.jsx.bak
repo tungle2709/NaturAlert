@@ -1,0 +1,346 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
+import Globe from 'globe.gl';
+
+const App = () => {
+  const [page, setPage] = useState('dashboard');
+  const [user, setUser] = useState(null);
+  const [location, setLocation] = useState('');
+  const [weatherData, setWeatherData] = useState(null);
+  const [prediction, setPrediction] = useState('');
+  const [email, setEmail] = useState('');
+  const [sms, setSms] = useState('');
+  const [sosLocation, setSosLocation] = useState('');
+  const [peopleCount, setPeopleCount] = useState(1);
+  const [savedLocations, setSavedLocations] = useState([]);
+  const [sosAlerts, setSosAlerts] = useState([]);
+  const [message, setMessage] = useState('');
+  const [newLocation, setNewLocation] = useState('');
+  const globeEl = useRef();
+  const globeInstance = useRef();
+
+  useEffect(() => {
+    const app = initializeApp(window.__firebase_config);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    (async () => {
+      try {
+        if (window.__initial_auth_token) {
+          await signInWithCustomToken(auth, window.__initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (e) {
+        await signInAnonymously(auth);
+      }
+    })();
+
+    onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      if (u) {
+        const savedRef = collection(db, `artifacts/${window.__app_id}/users/${u.uid}/saved_locations`);
+        onSnapshot(savedRef, (snap) => {
+          setSavedLocations(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+
+        const sosRef = query(collection(db, `artifacts/${window.__app_id}/public/data/emergency_alerts`), orderBy('timestamp', 'desc'), limit(10));
+        onSnapshot(sosRef, (snap) => {
+          setSosAlerts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+      }
+    });
+
+    if (globeEl.current && !globeInstance.current) {
+      globeInstance.current = Globe()(globeEl.current)
+        .globeImageUrl('//unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
+        .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
+        .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
+        .pointOfView({ altitude: 2.5 })
+        .pointsData([])
+        .pointAltitude(0.01)
+        .pointRadius(0.5)
+        .pointColor(() => '#ff0000')
+        .pointLabel('name');
+    }
+  }, []);
+
+  const fetchMockWeather = (loc) => {
+    const base = loc.toLowerCase();
+    if (base.includes('desert') || base.includes('phoenix') || base.includes('dubai')) {
+      return [
+        { day: 'Day 1', maxTemp: 42, rainfall: 0, windSpeed: 15 },
+        { day: 'Day 2', maxTemp: 44, rainfall: 0, windSpeed: 18 },
+        { day: 'Day 3', maxTemp: 43, rainfall: 0, windSpeed: 12 }
+      ];
+    } else if (base.includes('coast') || base.includes('miami') || base.includes('mumbai')) {
+      return [
+        { day: 'Day 1', maxTemp: 28, rainfall: 45, windSpeed: 65 },
+        { day: 'Day 2', maxTemp: 27, rainfall: 60, windSpeed: 75 },
+        { day: 'Day 3', maxTemp: 26, rainfall: 55, windSpeed: 70 }
+      ];
+    } else if (base.includes('mountain') || base.includes('denver') || base.includes('nepal')) {
+      return [
+        { day: 'Day 1', maxTemp: 5, rainfall: 20, windSpeed: 40 },
+        { day: 'Day 2', maxTemp: 3, rainfall: 25, windSpeed: 50 },
+        { day: 'Day 3', maxTemp: 4, rainfall: 22, windSpeed: 45 }
+      ];
+    }
+    return [
+      { day: 'Day 1', maxTemp: 22, rainfall: 10, windSpeed: 20 },
+      { day: 'Day 2', maxTemp: 24, rainfall: 5, windSpeed: 18 },
+      { day: 'Day 3', maxTemp: 23, rainfall: 8, windSpeed: 22 }
+    ];
+  };
+
+  const predictDisaster = (loc, weather) => {
+    const avgRain = weather.reduce((a, b) => a + b.rainfall, 0) / 3;
+    const avgWind = weather.reduce((a, b) => a + b.windSpeed, 0) / 3;
+    const avgTemp = weather.reduce((a, b) => a + b.maxTemp, 0) / 3;
+
+    if (avgRain > 50 && avgWind > 60) return '🌊 High Flood Alert';
+    if (avgWind > 70) return '🌪️ Tornado Warning';
+    if (avgTemp > 40) return '🔥 Extreme Heat Warning';
+    if (avgTemp < 5) return '❄️ Severe Cold Alert';
+    if (avgRain > 30) return '⚠️ Moderate Flood Risk';
+    return '✅ Low Risk';
+  };
+
+  const geocodeLocation = async (loc) => {
+    const coords = {
+      'tokyo': { lat: 35.6762, lng: 139.6503 },
+      'new york': { lat: 40.7128, lng: -74.0060 },
+      'london': { lat: 51.5074, lng: -0.1278 },
+      'paris': { lat: 48.8566, lng: 2.3522 },
+      'miami': { lat: 25.7617, lng: -80.1918 },
+      'mumbai': { lat: 19.0760, lng: 72.8777 },
+      'dubai': { lat: 25.2048, lng: 55.2708 },
+      'phoenix': { lat: 33.4484, lng: -112.0740 },
+      'denver': { lat: 39.7392, lng: -104.9903 },
+      'sydney': { lat: -33.8688, lng: 151.2093 },
+      'beijing': { lat: 39.9042, lng: 116.4074 },
+      'moscow': { lat: 55.7558, lng: 37.6173 }
+    };
+    const key = loc.toLowerCase().split(',')[0].trim();
+    return coords[key] || { lat: 0, lng: 0 };
+  };
+
+  const handlePredict = async () => {
+    if (!location) return;
+    const coords = await geocodeLocation(location);
+    if (globeInstance.current) {
+      globeInstance.current
+        .pointsData([{ lat: coords.lat, lng: coords.lng, name: location }])
+        .pointOfView({ lat: coords.lat, lng: coords.lng, altitude: 1.5 }, 1000);
+    }
+    const weather = fetchMockWeather(location);
+    setWeatherData(weather);
+    setPrediction(predictDisaster(location, weather));
+    setSosLocation(location);
+  };
+
+  const handleAlertSubscribe = async () => {
+    if (!user || !email) return;
+    const db = getFirestore();
+    await addDoc(collection(db, `artifacts/${window.__app_id}/public/data/alerts_subscription_queue`), {
+      email, sms, location, status: 'PENDING', timestamp: Date.now()
+    });
+    setMessage(`Successfully subscribed. Cloud Functions will process your alert request for ${location}!`);
+    setTimeout(() => setMessage(''), 5000);
+    setEmail('');
+    setSms('');
+  };
+
+  const handleSOS = async () => {
+    if (!user || !sosLocation) return;
+    const db = getFirestore();
+    await addDoc(collection(db, `artifacts/${window.__app_id}/public/data/emergency_alerts`), {
+      location: sosLocation, peopleCount, userId: user.uid, timestamp: Date.now()
+    });
+    setMessage('🚨 SOS Alert Sent! Emergency services notified.');
+    setTimeout(() => setMessage(''), 5000);
+  };
+
+  const handleSaveLocation = async () => {
+    if (!user || !newLocation) return;
+    const db = getFirestore();
+    await addDoc(collection(db, `artifacts/${window.__app_id}/users/${user.uid}/saved_locations`), {
+      name: newLocation, timestamp: Date.now()
+    });
+    setNewLocation('');
+  };
+
+  const handleCheckPrediction = async (loc) => {
+    setLocation(loc);
+    const coords = await geocodeLocation(loc);
+    if (globeInstance.current) {
+      globeInstance.current
+        .pointsData([{ lat: coords.lat, lng: coords.lng, name: loc }])
+        .pointOfView({ lat: coords.lat, lng: coords.lng, altitude: 1.5 }, 1000);
+    }
+    const weather = fetchMockWeather(loc);
+    setWeatherData(weather);
+    setPrediction(predictDisaster(loc, weather));
+    setPage('dashboard');
+  };
+
+  return (
+    <div className="relative min-h-screen overflow-hidden">
+      <div ref={globeEl} className="fixed inset-0 w-full h-full"></div>
+      
+      <div className="relative z-10">
+        <nav className="bg-black/30 backdrop-blur-md border-b border-white/10">
+          <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+              <span className="text-3xl">🌍</span> Disaster Alert
+            </h1>
+            <div className="flex gap-3 items-center">
+              <button onClick={() => setPage('dashboard')} className={`px-4 py-2 rounded-full transition ${page === 'dashboard' ? 'bg-white text-black' : 'text-white hover:bg-white/20'}`}>Dashboard</button>
+              <button onClick={() => setPage('alerts')} className={`px-4 py-2 rounded-full transition ${page === 'alerts' ? 'bg-white text-black' : 'text-white hover:bg-white/20'}`}>Alerts</button>
+              <button onClick={() => setPage('saved')} className={`px-4 py-2 rounded-full transition ${page === 'saved' ? 'bg-white text-black' : 'text-white hover:bg-white/20'}`}>Saved</button>
+              <button onClick={() => setPage('sos')} className={`px-4 py-2 rounded-full transition ${page === 'sos' ? 'bg-red-500 text-white' : 'text-white hover:bg-red-500/20'}`}>🚨 SOS</button>
+              {user && <span className="text-xs text-white/70 bg-white/10 px-3 py-1 rounded-full">ID: {user.uid.slice(0, 8)}</span>}
+              <button onClick={() => setMessage('Session Mock Sign-Out Complete')} className="text-xs text-white/70 hover:text-white">Sign Out</button>
+            </div>
+          </div>
+        </nav>
+
+        {message && (
+          <div className="fixed top-20 right-6 z-50 animate-fade-in">
+            <div className="bg-white/90 backdrop-blur-md border border-green-400 text-green-800 px-6 py-4 rounded-2xl shadow-2xl">{message}</div>
+          </div>
+        )}
+
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          {page === 'dashboard' && (
+            <div className="space-y-6">
+              <div className="bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/20">
+                <h2 className="text-4xl font-bold mb-6 text-white">Search Location</h2>
+                <div className="flex gap-4">
+                  <input
+                    type="text"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="Enter location (e.g., Tokyo, Miami, London)"
+                    className="flex-1 px-6 py-4 bg-white/90 backdrop-blur-md border-0 rounded-2xl focus:ring-4 focus:ring-blue-500/50 text-lg"
+                  />
+                  <button onClick={handlePredict} className="px-10 py-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-2xl hover:from-blue-600 hover:to-purple-700 font-semibold text-lg shadow-lg">Search</button>
+                </div>
+              </div>
+
+              {weatherData && (
+                <div className="bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/20">
+                  <h3 className="text-2xl font-semibold mb-6 text-white">Weather Data (Last 3 Days)</h3>
+                  <div className="grid grid-cols-3 gap-4">
+                    {weatherData.map((d, i) => (
+                      <div key={i} className="bg-white/20 backdrop-blur-md rounded-2xl p-6 border border-white/30">
+                        <p className="text-white/70 text-sm mb-2">{d.day}</p>
+                        <p className="text-white text-xl font-bold">{d.maxTemp}°C</p>
+                        <p className="text-white/90 text-sm">💧 {d.rainfall}mm</p>
+                        <p className="text-white/90 text-sm">💨 {d.windSpeed}km/h</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {prediction && (
+                <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 backdrop-blur-xl rounded-3xl p-8 border-2 border-purple-400/50 shadow-2xl">
+                  <h3 className="text-3xl font-bold text-white">Prediction: {prediction}</h3>
+                </div>
+              )}
+            </div>
+          )}
+
+          {page === 'alerts' && (
+            <div className="bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/20">
+              <h2 className="text-4xl font-bold mb-6 text-white">Subscribe to Alerts</h2>
+              <div className="space-y-4">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Email Address"
+                  className="w-full px-6 py-4 bg-white/90 backdrop-blur-md border-0 rounded-2xl text-lg"
+                />
+                <input
+                  type="tel"
+                  value={sms}
+                  onChange={(e) => setSms(e.target.value)}
+                  placeholder="SMS Number (optional)"
+                  className="w-full px-6 py-4 bg-white/90 backdrop-blur-md border-0 rounded-2xl text-lg"
+                />
+                <button onClick={handleAlertSubscribe} className="w-full px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-2xl hover:from-blue-600 hover:to-purple-700 font-semibold text-lg shadow-lg">Subscribe</button>
+              </div>
+            </div>
+          )}
+
+          {page === 'saved' && (
+            <div className="bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/20">
+              <h2 className="text-4xl font-bold mb-6 text-white">Saved Locations</h2>
+              <div className="flex gap-4 mb-6">
+                <input
+                  type="text"
+                  value={newLocation}
+                  onChange={(e) => setNewLocation(e.target.value)}
+                  placeholder="Location name"
+                  className="flex-1 px-6 py-4 bg-white/90 backdrop-blur-md border-0 rounded-2xl text-lg"
+                />
+                <button onClick={handleSaveLocation} className="px-10 py-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-2xl hover:from-blue-600 hover:to-purple-700 font-semibold shadow-lg">Save</button>
+              </div>
+              <div className="space-y-3">
+                {savedLocations.map((loc) => (
+                  <div key={loc.id} className="flex justify-between items-center p-5 bg-white/20 backdrop-blur-md rounded-2xl border border-white/30">
+                    <span className="font-medium text-white text-lg">{loc.name}</span>
+                    <button onClick={() => handleCheckPrediction(loc.name)} className="px-6 py-2 bg-white text-black rounded-full hover:bg-white/90 font-semibold">Check</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {page === 'sos' && (
+            <div className="space-y-6">
+              <div className="bg-red-500/20 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border-2 border-red-400/50">
+                <h2 className="text-4xl font-bold mb-6 text-white">🚨 Emergency SOS</h2>
+                <div className="space-y-4">
+                  <input
+                    type="text"
+                    value={sosLocation}
+                    onChange={(e) => setSosLocation(e.target.value)}
+                    placeholder="Current Location"
+                    className="w-full px-6 py-4 bg-white/90 backdrop-blur-md border-0 rounded-2xl text-lg"
+                  />
+                  <input
+                    type="number"
+                    value={peopleCount}
+                    onChange={(e) => setPeopleCount(e.target.value)}
+                    placeholder="Number of People"
+                    className="w-full px-6 py-4 bg-white/90 backdrop-blur-md border-0 rounded-2xl text-lg"
+                  />
+                  <button onClick={handleSOS} className="w-full px-8 py-5 bg-gradient-to-r from-red-600 to-red-700 text-white text-xl font-bold rounded-2xl hover:from-red-700 hover:to-red-800 shadow-2xl">SEND SOS</button>
+                </div>
+              </div>
+
+              <div className="bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/20">
+                <h3 className="text-3xl font-bold mb-6 text-white">Recent SOS Alerts</h3>
+                <div className="space-y-3">
+                  {sosAlerts.map((alert) => (
+                    <div key={alert.id} className="p-5 bg-red-500/20 backdrop-blur-md rounded-2xl border border-red-400/30">
+                      <p className="font-semibold text-white text-lg">📍 {alert.location}</p>
+                      <p className="text-sm text-white/80">People: {alert.peopleCount} | User: {alert.userId?.slice(0, 8)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default App;
