@@ -60,17 +60,25 @@ const App = () => {
     onAuthStateChanged(auth, (u) => {
       setUser(u);
       if (u) {
-        const savedRef = collection(db, `artifacts/${window.__app_id}/users/${u.uid}/saved_locations`);
-        onSnapshot(savedRef, (snap) => {
-          setSavedLocations(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
-
         const sosRef = query(collection(db, `artifacts/${window.__app_id}/public/data/emergency_alerts`), orderBy('timestamp', 'desc'), limit(10));
         onSnapshot(sosRef, (snap) => {
           setSosAlerts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         });
       }
     });
+
+    // Load saved locations from localStorage
+    const loadSavedLocations = () => {
+      try {
+        const saved = JSON.parse(localStorage.getItem('savedLocations') || '[]');
+        setSavedLocations(saved);
+      } catch (err) {
+        console.error('Error loading saved locations:', err);
+        setSavedLocations([]);
+      }
+    };
+    
+    loadSavedLocations();
 
     // Initialize Globe
     if (globeEl.current && !globeInstance.current) {
@@ -344,10 +352,77 @@ const App = () => {
     setNewLocation('');
   };
 
+  const handleSaveCurrentLocation = () => {
+    if (!selectedLocation || !riskData) {
+      showMessage('⚠ Please select a location and get risk data first');
+      return;
+    }
+    
+    try {
+      // Get existing saved locations from localStorage
+      const existingLocations = JSON.parse(localStorage.getItem('savedLocations') || '[]');
+      
+      // Create new location object
+      const newLocation = {
+        id: Date.now().toString(), // Use timestamp as unique ID
+        name: selectedLocation.display_name || selectedLocation.name,
+        location_id: location,
+        latitude: selectedLocation.latitude,
+        longitude: selectedLocation.longitude,
+        risk_score: riskData.risk_score,
+        disaster_type: riskData.disaster_type,
+        confidence: riskData.confidence,
+        has_risk: riskData.has_risk,
+        explanation: riskData.ai_explanation || riskData.explanation,
+        recommendations: riskData.recommendations,
+        weather_snapshot: riskData.weather_snapshot,
+        timestamp: Date.now()
+      };
+      
+      // Add new location to the beginning of the array
+      const updatedLocations = [newLocation, ...existingLocations];
+      
+      // Save back to localStorage
+      localStorage.setItem('savedLocations', JSON.stringify(updatedLocations));
+      
+      // Update state to reflect the new saved location
+      setSavedLocations(updatedLocations);
+      
+      showMessage('✓ Location and prediction saved successfully!');
+      
+      // Navigate to saved page after a short delay
+      setTimeout(() => {
+        setPage('saved');
+      }, 1500);
+      
+    } catch (err) {
+      showMessage('⚠ Failed to save location');
+      console.error('Save error:', err);
+    }
+  };
+
   const handleCheckPrediction = async (loc) => {
     setLocation(loc);
     await fetchRiskData(loc);
     setPage('dashboard');
+  };
+
+  const handleDeleteLocation = (locationId) => {
+    try {
+      // Filter out the location to delete
+      const updatedLocations = savedLocations.filter(loc => loc.id !== locationId);
+      
+      // Update localStorage
+      localStorage.setItem('savedLocations', JSON.stringify(updatedLocations));
+      
+      // Update state
+      setSavedLocations(updatedLocations);
+      
+      showMessage('✓ Location deleted successfully');
+    } catch (err) {
+      showMessage('⚠ Failed to delete location');
+      console.error('Delete error:', err);
+    }
   };
 
   const handleChatSend = async () => {
@@ -460,7 +535,7 @@ const App = () => {
                         className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-200 transition-all rounded-t-[20px]"
                       >
                         <div className="font-semibold text-gray-900 flex items-center gap-2">
-                          > Use Current Location
+                          &gt; Use Current Location
                         </div>
                         <div className="text-xs text-gray-600">
                           Detect your location automatically
@@ -511,7 +586,7 @@ const App = () => {
                   disabled={loading || !location}
                   className="w-full py-3.5 bg-white/10 backdrop-blur-2xl border border-white/20 text-white rounded-[18px] hover:bg-white/15 font-semibold shadow-[0_4px_16px_rgba(0,0,0,0.08)] disabled:opacity-50 transition-all"
                 >
-                  {loading ? 'Loading...' : 'Get Risk Assessment'}
+                  {loading ? 'Analyzing...' : 'Get Risk Assessment'}
                 </button>
               </div>
             </div>
@@ -533,6 +608,14 @@ const App = () => {
                   <div className="text-white/60 text-xs mt-2">
                     Confidence: {riskData.confidence.toFixed(1)}%
                   </div>
+                  
+                  {/* Save Button */}
+                  <button
+                    onClick={handleSaveCurrentLocation}
+                    className="w-full mt-4 py-3 bg-white/10 backdrop-blur-2xl border border-white/20 text-white rounded-[18px] hover:bg-white/15 font-semibold shadow-[0_4px_16px_rgba(0,0,0,0.08)] transition-all"
+                  >
+                    Save Location & Prediction
+                  </button>
                 </div>
 
                 {riskData.weather_snapshot && (
@@ -632,54 +715,93 @@ const App = () => {
         )}
 
         {page === 'saved' && (
-          <div className="fixed left-6 top-24 w-96 max-h-[calc(100vh-120px)] overflow-y-auto">
-            <div className="bg-black/40 backdrop-blur-2xl rounded-3xl p-6 border border-white/20 shadow-2xl">
-              <h2 className="text-2xl font-bold mb-4 text-white">Saved Locations</h2>
-              <div className="space-y-3 mb-4">
-                <input
-                  type="text"
-                  value={newLocation}
-                  onChange={(e) => setNewLocation(e.target.value)}
-                  placeholder="Location name"
-                  className="w-full px-5 py-3 bg-white/90 rounded-2xl text-base"
-                />
-                <button onClick={handleSaveLocation} className="w-full py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-2xl hover:from-blue-600 hover:to-purple-700 font-semibold shadow-lg">Save</button>
-              </div>
-              <div className="space-y-2">
-                {savedLocations.map((loc) => (
-                  <div key={loc.id} className="flex justify-between items-center p-3 bg-white/10 rounded-xl border border-white/20">
-                    <span className="text-white text-sm font-medium">{loc.name}</span>
-                    <button onClick={() => handleCheckPrediction(loc.name)} className="px-4 py-1 bg-white text-black rounded-full text-xs font-semibold hover:bg-white/90">Check</button>
-                  </div>
-                ))}
-              </div>
+          <div className="fixed left-6 top-24 w-96 max-h-[calc(100vh-120px)] overflow-y-auto scrollbar-hide space-y-3">
+            <div className="bg-white/5 backdrop-blur-3xl rounded-[28px] p-6 border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
+              <h2 className="text-xl font-semibold mb-4 text-white/95">Saved Locations</h2>
+              
+              {savedLocations.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="text-white/60 text-sm mb-2">No saved locations yet</div>
+                  <div className="text-white/40 text-xs">Search and save locations from the Home page</div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {savedLocations.map((loc) => (
+                    <div key={loc.id} className="bg-white/8 backdrop-blur-xl rounded-[20px] p-4 border border-white/15">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex-1">
+                          <div className="text-white/95 font-semibold text-sm">{loc.name}</div>
+                          {loc.risk_score !== undefined && (
+                            <div className={`text-lg font-bold mt-1 ${getRiskColor(loc.risk_score)}`}>
+                              {loc.risk_score.toFixed(1)}% Risk
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => handleCheckPrediction(loc.location_id || loc.name)} 
+                            className="px-3 py-1.5 bg-white/90 text-gray-900 rounded-full text-xs font-semibold hover:bg-white transition-all"
+                          >
+                            View
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteLocation(loc.id)} 
+                            className="px-3 py-1.5 bg-red-500/90 text-white rounded-full text-xs font-semibold hover:bg-red-600/90 transition-all"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {loc.disaster_type && loc.disaster_type !== 'none' && (
+                        <div className="text-white/70 text-xs mt-2">
+                          Type: {loc.disaster_type.replace('_', ' ').toUpperCase()}
+                        </div>
+                      )}
+                      
+                      {loc.timestamp && (
+                        <div className="text-white/50 text-xs mt-2">
+                          Predicted: {new Date(loc.timestamp).toLocaleDateString()} at {new Date(loc.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
 
         {page === 'chat' && (
-          <div className="fixed left-6 top-24 w-96 max-h-[calc(100vh-120px)] flex flex-col">
-            <div className="bg-white/5 backdrop-blur-3xl rounded-[28px] border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.08)] flex-1 flex flex-col">
-              <div className="p-6 border-b border-white/20">
+          <div className="fixed left-6 top-24 w-96 h-[calc(100vh-120px)]">
+            <div className="bg-white/5 backdrop-blur-3xl rounded-[28px] border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.08)] h-full flex flex-col">
+              <div className="p-6 border-b border-white/20 flex-shrink-0">
                 <h2 className="text-xl font-semibold text-white/95">AI Assistant</h2>
                 <p className="text-white/70 text-sm mt-1">Ask about weather and disaster risks</p>
               </div>
               
-              <div className="flex-1 overflow-y-auto p-6 space-y-3 scrollbar-hide">
-                {chatHistory.map((msg, idx) => (
-                  <div key={idx} className={`${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
-                    <div className={`inline-block max-w-[80%] p-3 rounded-[18px] ${
-                      msg.role === 'user' 
-                        ? 'bg-white/15 backdrop-blur-2xl border border-white/20 text-white' 
-                        : 'bg-white/8 backdrop-blur-2xl border border-white/15 text-white/95'
-                    }`}>
-                      <p className="text-sm">{msg.content}</p>
-                    </div>
+              <div className="flex-1 overflow-y-auto p-6 space-y-3 min-h-0" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.3) transparent' }}>
+                {chatHistory.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="text-white/60 text-sm mb-2">No messages yet</div>
+                    <div className="text-white/40 text-xs">Start a conversation with the AI assistant</div>
                   </div>
-                ))}
+                ) : (
+                  chatHistory.map((msg, idx) => (
+                    <div key={idx} className={`${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
+                      <div className={`inline-block max-w-[80%] p-3 rounded-[18px] ${
+                        msg.role === 'user' 
+                          ? 'bg-white/15 backdrop-blur-2xl border border-white/20 text-white' 
+                          : 'bg-white/8 backdrop-blur-2xl border border-white/15 text-white/95'
+                      }`}>
+                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
               
-              <div className="p-4 border-t border-white/20">
+              <div className="p-4 border-t border-white/20 flex-shrink-0">
                 <div className="flex gap-2">
                   <input
                     type="text"
