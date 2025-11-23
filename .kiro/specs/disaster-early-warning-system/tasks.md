@@ -175,39 +175,39 @@ This implementation plan breaks down the Disaster Early Warning System into disc
   - Create concise, actionable alert messages
   - _Requirements: 5.3_
 
-- [ ] 6. Backend API - Flask/FastAPI endpoints
+- [-] 6. Backend API - Flask/FastAPI endpoints
   - Set up Flask or FastAPI application
   - Implement REST API endpoints
   - Add CORS middleware for frontend
   - Implement error handling
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 7.1, 7.2, 7.3, 7.4, 7.5, 8.1, 8.2, 8.3, 9.1, 9.2, 9.3, 9.4, 9.5, 11.1, 11.2, 11.3, 11.4, 11.5, 13.1, 13.2, 13.3, 13.4, 13.5_
 
-- [ ] 6.1 Create Flask/FastAPI application
+- [x] 6.1 Create Flask/FastAPI application
   - Create `backend/app.py`
   - Initialize FastAPI app with CORS middleware
   - Configure for localhost:5000
   - Add root endpoint with API info
   - _Requirements: 16.1, 16.4, 17.1_
 
-- [ ] 6.2 Implement risk assessment endpoints
+- [x] 6.2 Implement risk assessment endpoints
   - Implement `GET /api/v1/risk/current` endpoint
   - Implement `GET /api/v1/risk/trends` endpoint
   - Implement `GET /api/v1/predictions/hourly` endpoint (mock for now)
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 8.1, 8.2, 8.3, 10.1, 10.2_
 
-- [ ] 6.3 Implement Gemini AI endpoints
+- [x] 6.3 Implement Gemini AI endpoints
   - Implement `POST /api/v1/gemini/explain` endpoint
   - Implement `POST /api/v1/gemini/chat` endpoint
   - Add request/response validation with Pydantic models
   - _Requirements: 4.2, 4.3, 4.4, 15.1, 15.2, 15.3_
 
-- [ ] 6.4 Implement historical data endpoints
+- [x] 6.4 Implement historical data endpoints
   - Implement `GET /api/v1/history/disasters` endpoint
   - Add query parameters for filtering (type, date range, location)
   - Implement pagination
   - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5_
 
-- [ ] 6.5 Implement map and visualization endpoints
+- [x] 6.5 Implement map and visualization endpoints
   - Implement `GET /api/v1/map/heatmap` endpoint
   - Return sample heatmap data for development
   - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
