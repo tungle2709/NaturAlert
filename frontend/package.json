@@ -6,10 +6,19 @@
     "dev": "vite"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.5",
+    "@mui/material": "^7.3.5",
+    "axios": "^1.13.2",
     "firebase": "^10.7.1",
     "globe.gl": "^2.45.0",
+    "leaflet": "^1.9.4",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "react-leaflet": "^5.0.0",
+    "react-router-dom": "^7.9.6",
+    "recharts": "^3.5.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
