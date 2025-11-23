@@ -179,18 +179,19 @@ const App = () => {
 
   const handleUseCurrentLocation = () => {
     if (!navigator.geolocation) {
-      // Silently handle - geolocation not supported
+      showMessage('⚠ Geolocation is not supported by your browser');
       return;
     }
 
-    showMessage('> Getting your location...');
+    showMessage('📍 Getting your location...');
     setLocationSearch('Getting your location...');
+    setLoading(true);
     
     // Enhanced geolocation options
     const geoOptions = {
       enableHighAccuracy: true,  // Use GPS if available
-      timeout: 10000,            // 10 second timeout
-      maximumAge: 0              // Don't use cached position
+      timeout: 15000,            // 15 second timeout (increased)
+      maximumAge: 300000         // Accept cached position up to 5 minutes old
     };
     
     navigator.geolocation.getCurrentPosition(
@@ -198,6 +199,8 @@ const App = () => {
         const { latitude, longitude } = position.coords;
         
         try {
+          showMessage('🌍 Found your location, getting weather data...');
+          
           // Use reverse geocoding to get location name
           const response = await fetch(
             `https://geocoding-api.open-meteo.com/v1/search?latitude=${latitude}&longitude=${longitude}&count=1&language=en&format=json`
@@ -247,7 +250,7 @@ const App = () => {
             }]);
           }
           
-          showMessage(`✓ Analyzing weather data...`);
+          showMessage(`🔍 Analyzing weather data for ${locationName}...`);
           
           // Use the main risk assessment endpoint which fetches everything
           const locationId = `${latitude},${longitude}`;
@@ -255,10 +258,13 @@ const App = () => {
           
           setRiskData(risk);
           setLocation(locationId);
-          showMessage(`✓ Analysis complete: ${locationName}`);
+          showMessage(`✅ Analysis complete: ${locationName}`);
         } catch (err) {
-          // Silently handle error - no message displayed
+          console.error('Location analysis error:', err);
+          showMessage(`⚠ Error analyzing location: ${err.message}`);
           setLocationSearch('');
+        } finally {
+          setLoading(false);
         }
       },
       (error) => {
@@ -267,24 +273,25 @@ const App = () => {
         
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            errorMessage = 'Location permission denied';
-            suggestion = 'Enable location access in System Settings > Privacy & Security > Location Services';
+            errorMessage = '🚫 Location permission denied';
+            suggestion = 'Please enable location access in your browser settings';
             break;
           case error.POSITION_UNAVAILABLE:
-            errorMessage = 'Location information unavailable';
+            errorMessage = '📍 Location information unavailable';
             suggestion = 'Try searching for your city instead (e.g., "Toronto", "New York")';
             break;
           case error.TIMEOUT:
-            errorMessage = 'Location request timed out';
-            suggestion = 'Please try again or search for your location';
+            errorMessage = '⏱ Location request timed out';
+            suggestion = 'Please try again or search for your location manually';
             break;
           default:
-            errorMessage = 'Location service error';
+            errorMessage = '⚠ Location service error';
             suggestion = 'Use the search box to find your location';
         }
         
-        // Silently handle geolocation error
+        showMessage(`${errorMessage}. ${suggestion}`);
         setLocationSearch('');
+        setLoading(false);
         
         // Focus on search input as fallback
         setTimeout(() => {
