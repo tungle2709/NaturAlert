@@ -1,4 +1,4 @@
--- Disaster Early Warning System Database Schema
+-- NaturAlert Database Schema
 -- SQLite Database
 
 -- Table: disasters_historical

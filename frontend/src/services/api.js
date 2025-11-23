@@ -1,7 +1,7 @@
 /**
  * API Service Layer
  * 
- * Provides functions to interact with the Disaster Early Warning System backend API.
+ * Provides functions to interact with the NaturAlert backend API.
  * Base URL: http://localhost:8000
  */
 

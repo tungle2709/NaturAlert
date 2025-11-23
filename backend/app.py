@@ -1,7 +1,7 @@
 """
-Disaster Early Warning System - Backend API
+NaturAlert - Backend API
 
-FastAPI application providing REST endpoints for disaster prediction,
+FastAPI application providing REST endpoints for natural disaster prediction,
 weather data, AI explanations, and user management.
 """
 
@@ -20,8 +20,8 @@ from services.gemini_service import get_gemini_service, GEMINI_AVAILABLE
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="Disaster Early Warning System API",
-    description="REST API for disaster prediction, weather monitoring, and AI-powered insights",
+    title="NaturAlert API",
+    description="REST API for natural disaster prediction, weather monitoring, and AI-powered insights",
     version="1.0.0"
 )
 
@@ -129,7 +129,7 @@ def root():
     API root endpoint with service information.
     """
     return {
-        "message": "Disaster Early Warning System API",
+        "message": "NaturAlert API",
         "version": "1.0.0",
         "status": "operational",
         "services": {
@@ -2114,7 +2114,7 @@ if __name__ == "__main__":
         pass
     
     print("\n" + "="*60)
-    print("🌊 Disaster Early Warning System API")
+    print("🌊 NaturAlert API")
     print("="*60)
     print(f"📍 Server: http://localhost:{port}")
     print(f"📚 API Docs: http://localhost:{port}/docs")
