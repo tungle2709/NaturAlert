@@ -31,7 +31,7 @@ class DisasterLabeler:
                 'pressure_hpa': 1000,         # Low pressure threshold
                 'description': 'High precipitation with low pressure'
             },
-            'storm': {
+            'wind_storm': {
                 'wind_speed_mph': 40,         # High wind threshold
                 'pressure_hpa': 1005,         # Low pressure threshold
                 'description': 'High wind speed with low pressure'
@@ -100,7 +100,7 @@ class DisasterLabeler:
         # Apply disaster labeling rules
         df = self._apply_hurricane_labels(df, thresholds)
         df = self._apply_flood_labels(df, thresholds)
-        df = self._apply_storm_labels(df, thresholds)
+        df = self._apply_wind_storm_labels(df, thresholds)
         df = self._apply_extreme_rainfall_labels(df, thresholds)
         
         # Calculate disaster statistics
@@ -246,35 +246,35 @@ class DisasterLabeler:
         
         return df
     
-    def _apply_storm_labels(self, df: pd.DataFrame, thresholds: Dict) -> pd.DataFrame:
-        """Apply storm disaster labels"""
+    def _apply_wind_storm_labels(self, df: pd.DataFrame, thresholds: Dict) -> pd.DataFrame:
+        """Apply wind storm disaster labels"""
         
         if 'wind_speed' not in df.columns or 'pressure' not in df.columns:
-            logger.warning("Missing wind_speed or pressure columns for storm detection")
+            logger.warning("Missing wind_speed or pressure columns for wind storm detection")
             return df
         
-        storm_threshold = thresholds['storm']
+        wind_storm_threshold = thresholds['wind_storm']
         
-        # Storm conditions: High wind + low pressure (but not hurricane level)
+        # Wind storm conditions: High wind + low pressure (but not hurricane level)
         # Only apply if not already labeled as hurricane or flood
-        storm_mask = (
-            (df['wind_speed'] >= storm_threshold['wind_speed_mph']) &
-            (df['pressure'] <= storm_threshold['pressure_hpa']) &
+        wind_storm_mask = (
+            (df['wind_speed'] >= wind_storm_threshold['wind_speed_mph']) &
+            (df['pressure'] <= wind_storm_threshold['pressure_hpa']) &
             (df['disaster_type'] == 'none')
         )
         
-        df.loc[storm_mask, 'disaster_occurred'] = 1
-        df.loc[storm_mask, 'disaster_type'] = 'storm'
-        df.loc[storm_mask, 'disaster_severity'] = self._calculate_storm_severity(
-            df.loc[storm_mask], storm_threshold
+        df.loc[wind_storm_mask, 'disaster_occurred'] = 1
+        df.loc[wind_storm_mask, 'disaster_type'] = 'wind_storm'
+        df.loc[wind_storm_mask, 'disaster_severity'] = self._calculate_wind_storm_severity(
+            df.loc[wind_storm_mask], wind_storm_threshold
         )
-        df.loc[storm_mask, 'disaster_confidence'] = self._calculate_confidence(
-            df.loc[storm_mask], 'storm', storm_threshold
+        df.loc[wind_storm_mask, 'disaster_confidence'] = self._calculate_confidence(
+            df.loc[wind_storm_mask], 'wind_storm', wind_storm_threshold
         )
         
-        storm_count = storm_mask.sum()
-        if storm_count > 0:
-            logger.info(f"Identified {storm_count} storm events")
+        wind_storm_count = wind_storm_mask.sum()
+        if wind_storm_count > 0:
+            logger.info(f"Identified {wind_storm_count} wind storm events")
         
         return df
     
@@ -345,8 +345,8 @@ class DisasterLabeler:
         
         return pd.Series(np.select(conditions, choices, default='low'), index=df_subset.index)
     
-    def _calculate_storm_severity(self, df_subset: pd.DataFrame, threshold: Dict) -> pd.Series:
-        """Calculate storm severity based on wind speed and pressure"""
+    def _calculate_wind_storm_severity(self, df_subset: pd.DataFrame, threshold: Dict) -> pd.Series:
+        """Calculate wind storm severity based on wind speed and pressure"""
         
         wind_speed = df_subset['wind_speed']
         base_threshold = threshold['wind_speed_mph']
@@ -399,7 +399,7 @@ class DisasterLabeler:
                 pressure_ratio = threshold['pressure_hpa'] / row['pressure']
                 score = min(0.95, 0.5 + (precip_ratio - 1) * 0.15 + (pressure_ratio - 1) * 0.15)
             
-            elif disaster_type == 'storm':
+            elif disaster_type == 'wind_storm':
                 wind_ratio = row['wind_speed'] / threshold['wind_speed_mph']
                 pressure_ratio = threshold['pressure_hpa'] / row['pressure']
                 score = min(0.95, 0.5 + (wind_ratio - 1) * 0.15 + (pressure_ratio - 1) * 0.15)

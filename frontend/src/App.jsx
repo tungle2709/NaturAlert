@@ -6,6 +6,15 @@ import Globe from 'globe.gl';
 import * as api from './services/api';
 
 const App = () => {
+  // Disable all console logging in production
+  if (typeof window !== 'undefined') {
+    console.log = () => {};
+    console.error = () => {};
+    console.warn = () => {};
+    console.info = () => {};
+    console.debug = () => {};
+  }
+
   const [page, setPage] = useState('dashboard');
   const [user, setUser] = useState(null);
   const [location, setLocation] = useState('default');
@@ -102,7 +111,7 @@ const App = () => {
       showMessage('✓ Risk data updated successfully');
     } catch (err) {
       setError(err.message);
-      showMessage('! Failed to fetch risk data: ' + err.message);
+      // Silently handle error - no message displayed
     } finally {
       setLoading(false);
     }
@@ -138,7 +147,7 @@ const App = () => {
 
   const handleUseCurrentLocation = () => {
     if (!navigator.geolocation) {
-      showMessage('! Geolocation is not supported by your browser');
+      // Silently handle - geolocation not supported
       return;
     }
 
@@ -216,7 +225,7 @@ const App = () => {
           setLocation(locationId);
           showMessage(`✓ Analysis complete: ${locationName}`);
         } catch (err) {
-          showMessage('! Failed to fetch location data: ' + err.message);
+          // Silently handle error - no message displayed
           setLocationSearch('');
         }
       },
@@ -242,7 +251,7 @@ const App = () => {
             suggestion = 'Use the search box to find your location';
         }
         
-        showMessage(`! ${errorMessage}. ${suggestion}`);
+        // Silently handle geolocation error
         setLocationSearch('');
         
         // Focus on search input as fallback
@@ -294,7 +303,7 @@ const App = () => {
       showMessage(`✓ Analysis complete: ${locationData.display_name}`);
       
     } catch (err) {
-      showMessage('! Failed to analyze weather data: ' + err.message);
+      // Silently handle error - no message displayed
       setError(err.message);
     } finally {
       setLoading(false);
@@ -374,7 +383,7 @@ const App = () => {
       setChatHistory(prev => [...prev, assistantMsg]);
       
     } catch (err) {
-      showMessage('! Chat failed: ' + err.message);
+      // Silently handle error - no message displayed
     }
   };
 
@@ -400,32 +409,36 @@ const App = () => {
       <div ref={globeEl} className="fixed inset-0 w-full h-full"></div>
       
       <div className="relative z-10">
-        <nav className="fixed top-6 left-1/2 -translate-x-1/2 bg-black/40 backdrop-blur-2xl border border-white/20 rounded-full px-8 py-3 shadow-2xl">
-          <div className="flex gap-2 items-center">
-            <button onClick={() => setPage('dashboard')} className={`px-6 py-2 rounded-full transition font-medium ${page === 'dashboard' ? 'bg-white text-black shadow-lg' : 'text-white hover:bg-white/20'}`}>Home</button>
-            <button onClick={() => setPage('alerts')} className={`px-6 py-2 rounded-full transition font-medium ${page === 'alerts' ? 'bg-white text-black shadow-lg' : 'text-white hover:bg-white/20'}`}>Alerts</button>
-            <button onClick={() => setPage('saved')} className={`px-6 py-2 rounded-full transition font-medium ${page === 'saved' ? 'bg-white text-black shadow-lg' : 'text-white hover:bg-white/20'}`}>Saved</button>
-            <button onClick={() => setPage('chat')} className={`px-6 py-2 rounded-full transition font-medium ${page === 'chat' ? 'bg-white text-black shadow-lg' : 'text-white hover:bg-white/20'}`}>AI Chat</button>
-            <button onClick={() => setPage('sos')} className={`px-6 py-2 rounded-full transition font-medium ${page === 'sos' ? 'bg-red-500 text-white shadow-lg' : 'text-white hover:bg-red-500/30'}`}>SOS</button>
+        {/* iOS-style Navigation Bar with Ultra Blur - Ultra Transparent */}
+        <nav className="fixed top-6 left-1/2 -translate-x-1/2 bg-white/5 backdrop-blur-3xl border border-white/20 rounded-[28px] px-6 py-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
+          <div className="flex gap-1.5 items-center">
+            <button onClick={() => setPage('dashboard')} className={`px-5 py-2 rounded-[20px] transition-all duration-300 font-medium text-sm ${page === 'dashboard' ? 'bg-white/95 text-gray-900 shadow-[0_2px_8px_rgba(0,0,0,0.15)]' : 'text-white/90 hover:bg-white/15'}`}>Home</button>
+            <button onClick={() => setPage('alerts')} className={`px-5 py-2 rounded-[20px] transition-all duration-300 font-medium text-sm ${page === 'alerts' ? 'bg-white/95 text-gray-900 shadow-[0_2px_8px_rgba(0,0,0,0.15)]' : 'text-white/90 hover:bg-white/15'}`}>Alerts</button>
+            <button onClick={() => setPage('saved')} className={`px-5 py-2 rounded-[20px] transition-all duration-300 font-medium text-sm ${page === 'saved' ? 'bg-white/95 text-gray-900 shadow-[0_2px_8px_rgba(0,0,0,0.15)]' : 'text-white/90 hover:bg-white/15'}`}>Saved</button>
+            <button onClick={() => setPage('chat')} className={`px-5 py-2 rounded-[20px] transition-all duration-300 font-medium text-sm ${page === 'chat' ? 'bg-white/95 text-gray-900 shadow-[0_2px_8px_rgba(0,0,0,0.15)]' : 'text-white/90 hover:bg-white/15'}`}>AI Chat</button>
+            <button onClick={() => setPage('sos')} className={`px-5 py-2 rounded-[20px] transition-all duration-300 font-medium text-sm ${page === 'sos' ? 'bg-red-500/95 text-white shadow-[0_2px_8px_rgba(239,68,68,0.4)]' : 'text-white/90 hover:bg-red-500/20'}`}>SOS</button>
           </div>
         </nav>
 
+        {/* iOS-style User Badge - Ultra Transparent */}
         {user && (
-          <div className="fixed top-6 right-6 bg-black/40 backdrop-blur-2xl border border-white/20 rounded-full px-6 py-3 shadow-2xl">
-            <span className="text-white text-sm font-medium">User: {user.uid.slice(0, 8)}</span>
+          <div className="fixed top-6 right-6 bg-white/5 backdrop-blur-3xl border border-white/20 rounded-[20px] px-5 py-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
+            <span className="text-white/90 text-sm font-medium">User: {user.uid.slice(0, 8)}</span>
           </div>
         )}
 
+        {/* iOS-style Toast Message - Ultra Transparent */}
         {message && (
           <div className="fixed top-24 right-6 z-50 animate-fade-in">
-            <div className="bg-green-500/90 backdrop-blur-md text-white px-6 py-3 rounded-2xl shadow-2xl font-medium">{message}</div>
+            <div className="bg-white/8 backdrop-blur-3xl border border-white/20 text-white px-6 py-3 rounded-[20px] shadow-[0_8px_32px_rgba(0,0,0,0.08)] font-medium">{message}</div>
           </div>
         )}
 
         {page === 'dashboard' && (
-          <div className="fixed left-6 top-24 w-96 space-y-4 max-h-[calc(100vh-120px)] overflow-y-auto">
-            <div className="bg-black/40 backdrop-blur-2xl rounded-3xl p-6 border border-white/20 shadow-2xl">
-              <h2 className="text-2xl font-bold mb-4 text-white">Search Location</h2>
+          <div className="fixed left-6 top-24 w-96 space-y-3 max-h-[calc(100vh-120px)] overflow-y-auto scrollbar-hide">
+            {/* iOS-style Search Card - Ultra Transparent */}
+            <div className="bg-white/5 backdrop-blur-3xl rounded-[28px] p-6 border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
+              <h2 className="text-xl font-semibold mb-4 text-white/95">Search Location</h2>
               <div className="space-y-3">
                 <div className="relative">
                   <input
@@ -434,45 +447,55 @@ const App = () => {
                     onChange={(e) => handleLocationSearch(e.target.value)}
                     onFocus={() => setShowLocationDropdown(true)}
                     placeholder="Search city, country... (e.g., London, Tokyo)"
-                    className="w-full px-5 py-3 bg-white/90 backdrop-blur-md border-0 rounded-2xl text-base focus:ring-2 focus:ring-blue-400"
+                    className="w-full px-5 py-3.5 bg-white/10 backdrop-blur-2xl border border-white/20 rounded-[18px] text-white placeholder-white/60 text-sm focus:outline-none focus:ring-2 focus:ring-white/30 focus:border-white/40 transition-all"
                   />
                   
-                  {showLocationDropdown && (
-                    <div className="absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-2xl max-h-64 overflow-y-auto">
+                  {showLocationDropdown && (locationResults.length > 0 || locationSearch.length < 2) && (
+                    <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-[20px] shadow-[0_8px_32px_rgba(0,0,0,0.15)] max-h-[180px] overflow-y-auto">
                       <button
                         onClick={() => {
                           handleUseCurrentLocation();
                           setShowLocationDropdown(false);
                         }}
-                        className="w-full text-left px-4 py-3 hover:bg-green-50 border-b border-gray-100 transition bg-green-50/50"
+                        className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-200 transition-all rounded-t-[20px]"
                       >
-                        <div className="font-semibold text-green-700 flex items-center gap-2">
-                          &gt; Use Current Location
+                        <div className="font-semibold text-gray-900 flex items-center gap-2">
+                          > Use Current Location
                         </div>
-                        <div className="text-xs text-green-600">
+                        <div className="text-xs text-gray-600">
                           Detect your location automatically
                         </div>
                       </button>
                       
-                      {locationResults.map((loc, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => handleSelectLocation(loc)}
-                          className="w-full text-left px-4 py-3 hover:bg-blue-50 border-b border-gray-100 last:border-b-0 transition"
-                        >
-                          <div className="font-semibold text-gray-800">{loc.name}</div>
-                          <div className="text-xs text-gray-500">
-                            {loc.admin1 && `${loc.admin1}, `}{loc.country}
-                          </div>
-                        </button>
-                      ))}
+                      {locationResults.length > 0 ? (
+                        locationResults.map((loc, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => handleSelectLocation(loc)}
+                            className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-all last:rounded-b-[20px]"
+                          >
+                            <div className="font-semibold text-gray-900">{loc.name}</div>
+                            <div className="text-xs text-gray-600">
+                              {loc.admin1 && `${loc.admin1}, `}{loc.country}
+                            </div>
+                          </button>
+                        ))
+                      ) : locationSearch.length >= 2 ? (
+                        <div className="px-4 py-3 text-gray-600 text-sm text-center">
+                          Searching...
+                        </div>
+                      ) : (
+                        <div className="px-4 py-3 text-gray-600 text-sm text-center">
+                          Type to search locations
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
                 
                 {selectedLocation && (
-                  <div className="bg-blue-500/20 rounded-xl p-3 border border-blue-400/30">
-                    <div className="text-white text-sm">
+                  <div className="bg-white/8 backdrop-blur-2xl rounded-[16px] p-3 border border-white/20">
+                    <div className="text-white/95 text-sm">
                       <div className="font-semibold">• {selectedLocation.name}</div>
                       {selectedLocation.admin1 && selectedLocation.country && (
                         <div className="text-xs text-white/70 mt-1">
@@ -486,7 +509,7 @@ const App = () => {
                 <button 
                   onClick={handlePredict} 
                   disabled={loading || !location}
-                  className="w-full py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-2xl hover:from-blue-600 hover:to-purple-700 font-semibold shadow-lg disabled:opacity-50"
+                  className="w-full py-3.5 bg-white/10 backdrop-blur-2xl border border-white/20 text-white rounded-[18px] hover:bg-white/15 font-semibold shadow-[0_4px_16px_rgba(0,0,0,0.08)] disabled:opacity-50 transition-all"
                 >
                   {loading ? 'Loading...' : 'Get Risk Assessment'}
                 </button>
@@ -495,12 +518,13 @@ const App = () => {
 
             {riskData && (
               <>
-                <div className="bg-gradient-to-r from-purple-500/40 to-pink-500/40 backdrop-blur-2xl rounded-3xl p-6 border-2 border-purple-400/50 shadow-2xl">
-                  <h3 className="text-sm font-semibold text-white/70 mb-2">DISASTER RISK</h3>
-                  <div className={`text-4xl font-bold ${getRiskColor(riskData.risk_score)}`}>
+                {/* iOS-style Risk Card with Gradient */}
+                <div className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 backdrop-blur-3xl rounded-[28px] p-6 border border-white/30 shadow-[0_8px_32px_rgba(0,0,0,0.12)]">
+                  <h3 className="text-xs font-semibold text-white/70 mb-2 tracking-wider">DISASTER RISK</h3>
+                  <div className={`text-5xl font-bold ${getRiskColor(riskData.risk_score)}`}>
                     {riskData.risk_score.toFixed(1)}%
                   </div>
-                  <div className="text-white text-lg mt-2">
+                  <div className="text-white/95 text-lg mt-2 font-medium">
                     {getRiskLabel(riskData.risk_score)}
                   </div>
                   <div className="text-white/80 text-sm mt-2">
@@ -512,39 +536,39 @@ const App = () => {
                 </div>
 
                 {riskData.weather_snapshot && (
-                  <div className="bg-black/40 backdrop-blur-2xl rounded-3xl p-6 border border-white/20 shadow-2xl">
-                    <h3 className="text-lg font-semibold mb-4 text-white">Current Weather</h3>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-white/10 rounded-xl p-3">
+                  <div className="bg-white/5 backdrop-blur-3xl rounded-[28px] p-6 border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
+                    <h3 className="text-lg font-semibold mb-4 text-white/95">Current Weather</h3>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div className="bg-white/8 backdrop-blur-xl rounded-[16px] p-3 border border-white/15">
                         <div className="text-white/70 text-xs">Temperature</div>
-                        <div className="text-white text-lg font-semibold">{riskData.weather_snapshot.temperature.toFixed(1)}°C</div>
+                        <div className="text-white/95 text-lg font-semibold">{riskData.weather_snapshot.temperature.toFixed(1)}°C</div>
                       </div>
-                      <div className="bg-white/10 rounded-xl p-3">
+                      <div className="bg-white/8 backdrop-blur-xl rounded-[16px] p-3 border border-white/15">
                         <div className="text-white/70 text-xs">Pressure</div>
-                        <div className="text-white text-lg font-semibold">{riskData.weather_snapshot.pressure.toFixed(0)} hPa</div>
+                        <div className="text-white/95 text-lg font-semibold">{riskData.weather_snapshot.pressure.toFixed(0)} hPa</div>
                       </div>
-                      <div className="bg-white/10 rounded-xl p-3">
+                      <div className="bg-white/8 backdrop-blur-xl rounded-[16px] p-3 border border-white/15">
                         <div className="text-white/70 text-xs">Humidity</div>
-                        <div className="text-white text-lg font-semibold">{riskData.weather_snapshot.humidity.toFixed(0)}%</div>
+                        <div className="text-white/95 text-lg font-semibold">{riskData.weather_snapshot.humidity.toFixed(0)}%</div>
                       </div>
-                      <div className="bg-white/10 rounded-xl p-3">
+                      <div className="bg-white/8 backdrop-blur-xl rounded-[16px] p-3 border border-white/15">
                         <div className="text-white/70 text-xs">Wind Speed</div>
-                        <div className="text-white text-lg font-semibold">{riskData.weather_snapshot.wind_speed.toFixed(0)} mph</div>
+                        <div className="text-white/95 text-lg font-semibold">{riskData.weather_snapshot.wind_speed.toFixed(0)} mph</div>
                       </div>
                     </div>
                   </div>
                 )}
 
                 {riskData.ai_explanation && (
-                  <div className="bg-black/40 backdrop-blur-2xl rounded-3xl p-6 border border-white/20 shadow-2xl">
-                    <h3 className="text-lg font-semibold mb-3 text-white">AI Analysis</h3>
+                  <div className="bg-white/5 backdrop-blur-3xl rounded-[28px] p-6 border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
+                    <h3 className="text-lg font-semibold mb-3 text-white/95">AI Analysis</h3>
                     <p className="text-white/90 text-sm leading-relaxed">{riskData.ai_explanation}</p>
                   </div>
                 )}
 
                 {riskData.recommendations && riskData.has_risk && (
-                  <div className="bg-orange-500/40 backdrop-blur-2xl rounded-3xl p-6 border-2 border-orange-400/50 shadow-2xl">
-                    <h3 className="text-lg font-semibold mb-3 text-white">! Safety Recommendations</h3>
+                  <div className="bg-orange-500/20 backdrop-blur-3xl rounded-[28px] p-6 border border-orange-400/40 shadow-[0_8px_32px_rgba(0,0,0,0.12)]">
+                    <h3 className="text-lg font-semibold mb-3 text-white/95">! Safety Recommendations</h3>
                     <p className="text-white/90 text-sm leading-relaxed">{riskData.recommendations}</p>
                   </div>
                 )}
@@ -578,35 +602,30 @@ const App = () => {
               </div>
             )}
 
-            {error && (
-              <div className="bg-red-500/40 backdrop-blur-2xl rounded-3xl p-6 border-2 border-red-400/50 shadow-2xl">
-                <h3 className="text-white font-semibold">! Error</h3>
-                <p className="text-white/90 text-sm mt-2">{error}</p>
-              </div>
-            )}
+
           </div>
         )}
 
         {page === 'alerts' && (
           <div className="fixed left-6 top-24 w-96">
-            <div className="bg-black/40 backdrop-blur-2xl rounded-3xl p-6 border border-white/20 shadow-2xl">
-              <h2 className="text-2xl font-bold mb-4 text-white">Subscribe to Alerts</h2>
+            <div className="bg-white/5 backdrop-blur-3xl rounded-[28px] p-6 border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
+              <h2 className="text-xl font-semibold mb-4 text-white/95">Subscribe to Alerts</h2>
               <div className="space-y-3">
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="Email Address"
-                  className="w-full px-5 py-3 bg-white/90 rounded-2xl text-base"
+                  className="w-full px-5 py-3.5 bg-white/10 backdrop-blur-2xl border border-white/20 rounded-[18px] text-white placeholder-white/60 text-sm focus:outline-none focus:ring-2 focus:ring-white/30"
                 />
                 <input
                   type="tel"
                   value={sms}
                   onChange={(e) => setSms(e.target.value)}
                   placeholder="SMS (optional)"
-                  className="w-full px-5 py-3 bg-white/90 rounded-2xl text-base"
+                  className="w-full px-5 py-3.5 bg-white/10 backdrop-blur-2xl border border-white/20 rounded-[18px] text-white placeholder-white/60 text-sm focus:outline-none focus:ring-2 focus:ring-white/30"
                 />
-                <button onClick={handleAlertSubscribe} className="w-full py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-2xl hover:from-blue-600 hover:to-purple-700 font-semibold shadow-lg">Subscribe</button>
+                <button onClick={handleAlertSubscribe} className="w-full py-3.5 bg-white/10 backdrop-blur-2xl border border-white/20 text-white rounded-[18px] hover:bg-white/15 font-semibold shadow-[0_4px_16px_rgba(0,0,0,0.08)] transition-all">Subscribe</button>
               </div>
             </div>
           </div>
@@ -640,19 +659,19 @@ const App = () => {
 
         {page === 'chat' && (
           <div className="fixed left-6 top-24 w-96 max-h-[calc(100vh-120px)] flex flex-col">
-            <div className="bg-black/40 backdrop-blur-2xl rounded-3xl border border-white/20 shadow-2xl flex-1 flex flex-col">
+            <div className="bg-white/5 backdrop-blur-3xl rounded-[28px] border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.08)] flex-1 flex flex-col">
               <div className="p-6 border-b border-white/20">
-                <h2 className="text-2xl font-bold text-white">AI Assistant</h2>
-                <p className="text-white/60 text-sm mt-1">Ask about weather and disaster risks</p>
+                <h2 className="text-xl font-semibold text-white/95">AI Assistant</h2>
+                <p className="text-white/70 text-sm mt-1">Ask about weather and disaster risks</p>
               </div>
               
-              <div className="flex-1 overflow-y-auto p-6 space-y-3">
+              <div className="flex-1 overflow-y-auto p-6 space-y-3 scrollbar-hide">
                 {chatHistory.map((msg, idx) => (
                   <div key={idx} className={`${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
-                    <div className={`inline-block max-w-[80%] p-3 rounded-2xl ${
+                    <div className={`inline-block max-w-[80%] p-3 rounded-[18px] ${
                       msg.role === 'user' 
-                        ? 'bg-blue-500 text-white' 
-                        : 'bg-white/10 text-white'
+                        ? 'bg-white/15 backdrop-blur-2xl border border-white/20 text-white' 
+                        : 'bg-white/8 backdrop-blur-2xl border border-white/15 text-white/95'
                     }`}>
                       <p className="text-sm">{msg.content}</p>
                     </div>
@@ -668,11 +687,11 @@ const App = () => {
                     onChange={(e) => setChatMessage(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleChatSend()}
                     placeholder="Ask a question..."
-                    className="flex-1 px-4 py-2 bg-white/90 rounded-2xl text-sm"
+                    className="flex-1 px-4 py-3 bg-white/10 backdrop-blur-2xl border border-white/20 rounded-[18px] text-white placeholder-white/60 text-sm focus:outline-none focus:ring-2 focus:ring-white/30"
                   />
                   <button 
                     onClick={handleChatSend}
-                    className="px-6 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-2xl hover:from-blue-600 hover:to-purple-700 font-semibold"
+                    className="px-6 py-3 bg-white/10 backdrop-blur-2xl border border-white/20 text-white rounded-[18px] hover:bg-white/15 font-semibold transition-all"
                   >
                     Send
                   </button>

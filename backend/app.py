@@ -354,7 +354,7 @@ DISASTER RISK SCORING CRITERIA (Use precise numerical scoring):
    - Precipitation 30-50mm + Low pressure = 20-35% risk
    - Precipitation <30mm = 5-15% risk
 
-2. STORM RISK:
+2. WIND STORM RISK:
    - Wind >60 km/h + Rapidly dropping pressure = 75-95% risk
    - Wind 40-60 km/h + Dropping pressure + Rain = 50-70% risk
    - Wind 30-40 km/h + Pressure changes = 25-45% risk
@@ -390,7 +390,7 @@ SCORING INSTRUCTIONS:
 Respond with ONLY valid JSON (no markdown, no code blocks, no extra text):
 {{
   "risk_score": <precise number 0-100>,
-  "disaster_type": "<flood|storm|hurricane|heatwave|extreme_cold|drought|none>",
+  "disaster_type": "<flood|wind_storm|hurricane|heatwave|extreme_cold|drought|none>",
   "confidence": <precise number 0-100>,
   "explanation": "<2-3 sentences explaining the numerical risk score and why>",
   "key_factors": ["<specific factor with numbers>", "<another factor>", "<third factor>"],
@@ -579,7 +579,7 @@ Based on this data, provide a JSON response with the following structure:
 {
   "has_disaster_risk": true/false,
   "risk_score": 0-100,
-  "disaster_type": "flood|storm|hurricane|heatwave|none",
+  "disaster_type": "flood|wind_storm|hurricane|heatwave|none",
   "confidence": 0-100,
   "explanation": "Brief explanation of the analysis",
   "recommendations": "Safety recommendations if risk exists"
@@ -587,7 +587,7 @@ Based on this data, provide a JSON response with the following structure:
 
 Analyze for these disaster types:
 - Flood: Heavy accumulated rainfall, low pressure
-- Storm: Rapid pressure changes, high winds
+- Wind Storm: Rapid pressure changes, high winds
 - Hurricane: Very low pressure, extreme winds, heavy rain
 - Heatwave: Sustained high temperatures
 - Extreme Cold: Sustained low temperatures
@@ -887,7 +887,7 @@ def get_disaster_history(
     Query historical disaster events with filtering and pagination.
     
     Supports filtering by:
-    - disaster_type: flood, storm, hurricane, extreme_rainfall
+    - disaster_type: flood, wind_storm, hurricane, extreme_rainfall
     - start_date/end_date: Date range filter
     - location: Location identifier or region
     - severity: low, moderate, high, extreme
