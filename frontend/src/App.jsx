@@ -26,9 +26,13 @@ const App = () => {
   const [email, setEmail] = useState('');
   const [sms, setSms] = useState('');
   const [sosLocation, setSosLocation] = useState('');
-  const [peopleCount, setPeopleCount] = useState(1);
+  const [peopleCount, setPeopleCount] = useState('');
   const [savedLocations, setSavedLocations] = useState([]);
   const [sosAlerts, setSosAlerts] = useState([]);
+  const [currentUserLocation, setCurrentUserLocation] = useState(null);
+  const [nearbySOSAlerts, setNearbySOSAlerts] = useState([]);
+  const [mySOSAlerts, setMySOSAlerts] = useState([]);
+  const [sosRadiusFilter, setSosRadiusFilter] = useState(10); // Default 10km
   const [message, setMessage] = useState('');
   const [newLocation, setNewLocation] = useState('');
   const [chatMessage, setChatMessage] = useState('');
@@ -59,12 +63,6 @@ const App = () => {
 
     onAuthStateChanged(auth, (u) => {
       setUser(u);
-      if (u) {
-        const sosRef = query(collection(db, `artifacts/${window.__app_id}/public/data/emergency_alerts`), orderBy('timestamp', 'desc'), limit(10));
-        onSnapshot(sosRef, (snap) => {
-          setSosAlerts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
-      }
     });
 
     // Load saved locations from localStorage
@@ -78,7 +76,23 @@ const App = () => {
       }
     };
     
+    // Load SOS alerts from localStorage
+    const loadSOSAlerts = () => {
+      try {
+        const alerts = JSON.parse(localStorage.getItem('sosAlerts') || '[]');
+        setSosAlerts(alerts);
+        
+        const myAlerts = JSON.parse(localStorage.getItem('mySOSAlerts') || '[]');
+        setMySOSAlerts(myAlerts);
+      } catch (err) {
+        console.error('Error loading SOS alerts:', err);
+        setSosAlerts([]);
+        setMySOSAlerts([]);
+      }
+    };
+    
     loadSavedLocations();
+    loadSOSAlerts();
 
     // Initialize Globe
     if (globeEl.current && !globeInstance.current) {
@@ -87,12 +101,22 @@ const App = () => {
         .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
         .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
         .pointOfView({ altitude: 2.5 })
-        .pointsData([])
-        .pointAltitude(0.01)
-        .pointRadius(1.2)
-        .pointColor('color')
-        .pointLabel('name')
-        .pointsMerge(false);
+        .htmlElementsData([])
+        .htmlElement(d => {
+          const el = document.createElement('div');
+          el.innerHTML = `
+            <div style="
+              color: ${d.color};
+              font-size: 24px;
+              text-shadow: 0 0 4px rgba(0,0,0,0.8);
+              cursor: pointer;
+              transform: translateY(-12px);
+            " title="${d.name}">
+              📍
+            </div>
+          `;
+          return el;
+        });
     }
   }, []);
 
@@ -214,7 +238,7 @@ const App = () => {
               altitude: 1.5
             }, 1000);
             
-            globeInstance.current.pointsData([{
+            globeInstance.current.htmlElementsData([{
               lat: latitude,
               lng: longitude,
               name: locationData.display_name,
@@ -288,7 +312,7 @@ const App = () => {
       }, 1000); // 1000ms animation duration
       
       // Add a marker at the selected location
-      globeInstance.current.pointsData([{
+      globeInstance.current.htmlElementsData([{
         lat: locationData.latitude,
         lng: locationData.longitude,
         name: locationData.display_name,
@@ -348,13 +372,87 @@ const App = () => {
     }
   };
 
-  const handleSOS = async () => {
-    if (!user || !sosLocation) return;
-    const db = getFirestore();
-    await addDoc(collection(db, `artifacts/${window.__app_id}/public/data/emergency_alerts`), {
-      location: sosLocation, peopleCount, userId: user.uid, timestamp: Date.now()
-    });
-    showMessage('! SOS Alert Sent! Emergency services notified.');
+  const handleSOS = () => {
+    if (!currentUserLocation) {
+      showMessage('⚠ Please enable location access first');
+      requestLocationForSOS();
+      return;
+    }
+
+    try {
+      // Get existing SOS alerts from localStorage
+      const existingAlerts = JSON.parse(localStorage.getItem('sosAlerts') || '[]');
+      
+      // Create new SOS alert
+      const newAlert = {
+        id: Date.now().toString(),
+        location: sosLocation || 'Emergency Location',
+        latitude: currentUserLocation.latitude,
+        longitude: currentUserLocation.longitude,
+        peopleCount: parseInt(peopleCount) || 1,
+        timestamp: Date.now(),
+        status: 'active',
+        isMine: true // Mark as user's own alert
+      };
+      
+      // Add to beginning of array
+      const updatedAlerts = [newAlert, ...existingAlerts];
+      
+      // Save to localStorage
+      localStorage.setItem('sosAlerts', JSON.stringify(updatedAlerts));
+      
+      // Update state
+      setSosAlerts(updatedAlerts);
+      
+      // Track user's own SOS alerts
+      const myAlerts = JSON.parse(localStorage.getItem('mySOSAlerts') || '[]');
+      const updatedMyAlerts = [newAlert, ...myAlerts];
+      localStorage.setItem('mySOSAlerts', JSON.stringify(updatedMyAlerts));
+      setMySOSAlerts(updatedMyAlerts);
+      
+      showMessage('✓ SOS Alert Sent! Help is on the way.');
+      
+      // Refresh nearby alerts and update globe
+      if (currentUserLocation) {
+        const nearby = filterNearbyAlerts(currentUserLocation.latitude, currentUserLocation.longitude);
+        
+        // Update globe markers
+        if (globeInstance.current) {
+          const markers = [
+            // User's current location (green)
+            {
+              lat: currentUserLocation.latitude,
+              lng: currentUserLocation.longitude,
+              name: 'Your Location',
+              size: 0.8,
+              color: '#00ff00'
+            }
+          ];
+          
+          // Add nearby SOS alerts (red)
+          nearby.forEach(alert => {
+            if (alert.latitude && alert.longitude) {
+              markers.push({
+                lat: alert.latitude,
+                lng: alert.longitude,
+                name: `SOS: ${alert.location || 'Emergency'} - ${alert.peopleCount} people`,
+                size: 0.6,
+                color: '#ff0000'
+              });
+            }
+          });
+          
+          globeInstance.current.htmlElementsData(markers);
+        }
+      }
+      
+      // Reset form
+      setSosLocation('');
+      setPeopleCount('');
+    } catch (err) {
+      showMessage('⚠ Failed to send SOS alert');
+      console.error('SOS error:', err);
+    }
   };
 
   const handleSaveLocation = async () => {
@@ -439,6 +537,57 @@ const App = () => {
     }
   };
 
+  const handleMarkAsSafe = (alertId) => {
+    try {
+      // Remove from my SOS alerts
+      const updatedMyAlerts = mySOSAlerts.filter(alert => alert.id !== alertId);
+      localStorage.setItem('mySOSAlerts', JSON.stringify(updatedMyAlerts));
+      setMySOSAlerts(updatedMyAlerts);
+      
+      // Remove from all SOS alerts
+      const allAlerts = JSON.parse(localStorage.getItem('sosAlerts') || '[]');
+      const updatedAllAlerts = allAlerts.filter(alert => alert.id !== alertId);
+      localStorage.setItem('sosAlerts', JSON.stringify(updatedAllAlerts));
+      setSosAlerts(updatedAllAlerts);
+      
+      // Update globe markers if location is available
+      if (currentUserLocation) {
+        const nearby = filterNearbyAlerts(currentUserLocation.latitude, currentUserLocation.longitude);
+        
+        if (globeInstance.current) {
+          const markers = [
+            {
+              lat: currentUserLocation.latitude,
+              lng: currentUserLocation.longitude,
+              name: 'Your Location',
+              size: 0.8,
+              color: '#00ff00'
+            }
+          ];
+          
+          nearby.forEach(alert => {
+            if (alert.latitude && alert.longitude) {
+              markers.push({
+                lat: alert.latitude,
+                lng: alert.longitude,
+                name: `SOS: ${alert.location || 'Emergency'} - ${alert.peopleCount} people`,
+                size: 0.6,
+                color: '#ff0000'
+              });
+            }
+          });
+          
+          globeInstance.current.htmlElementsData(markers);
+        }
+      }
+      
+      showMessage('✓ Marked as safe. SOS alert removed.');
+    } catch (err) {
+      showMessage('⚠ Failed to mark as safe');
+      console.error('Mark as safe error:', err);
+    }
+  };
+
   const handleChatSend = async () => {
     if (!chatMessage.trim()) return;
     
@@ -491,6 +640,118 @@ const App = () => {
     if (score >= 70) return 'HIGH RISK';
     if (score >= 50) return 'MODERATE RISK';
     return 'LOW RISK';
+  };
+
+  // Calculate distance between two coordinates using Haversine formula
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c; // Distance in km
+  };
+
+  // Get current location for SOS
+  const requestLocationForSOS = () => {
+    if (!navigator.geolocation) {
+      showMessage('⚠ Geolocation is not supported by your browser');
+      return;
+    }
+
+    showMessage('Requesting location permission...');
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setCurrentUserLocation({ latitude, longitude });
+        showMessage('✓ Location access granted');
+        
+        // Filter nearby SOS alerts
+        const nearby = filterNearbyAlerts(latitude, longitude);
+        
+        // Zoom globe to user's location
+        if (globeInstance.current) {
+          globeInstance.current.pointOfView({
+            lat: latitude,
+            lng: longitude,
+            altitude: 1.5
+          }, 1000);
+          
+          // Create markers for user location and nearby SOS alerts
+          const markers = [
+            // User's current location (green)
+            {
+              lat: latitude,
+              lng: longitude,
+              name: 'Your Location',
+              size: 0.8,
+              color: '#00ff00'
+            }
+          ];
+          
+          // Add nearby SOS alerts (red)
+          nearby.forEach(alert => {
+            if (alert.latitude && alert.longitude) {
+              markers.push({
+                lat: alert.latitude,
+                lng: alert.longitude,
+                name: `SOS: ${alert.location || 'Emergency'} - ${alert.peopleCount} people`,
+                size: 0.6,
+                color: '#ff0000'
+              });
+            }
+          });
+          
+          globeInstance.current.htmlElementsData(markers);
+        }
+      },
+      (error) => {
+        let errorMessage = 'Unable to get your location';
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = '⚠ Location permission denied. Please enable location access.';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = '⚠ Location information unavailable';
+            break;
+          case error.TIMEOUT:
+            errorMessage = '⚠ Location request timed out';
+            break;
+          default:
+            errorMessage = '⚠ Location service error';
+        }
+        showMessage(errorMessage);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+  };
+
+  // Filter SOS alerts within specified radius
+  const filterNearbyAlerts = (userLat, userLon, radius = sosRadiusFilter) => {
+    if (!sosAlerts || sosAlerts.length === 0) {
+      setNearbySOSAlerts([]);
+      return [];
+    }
+
+    const nearby = sosAlerts.filter(alert => {
+      if (!alert.latitude || !alert.longitude) return false;
+      const distance = calculateDistance(userLat, userLon, alert.latitude, alert.longitude);
+      return distance <= radius; // Within specified radius
+    }).map(alert => ({
+      ...alert,
+      distance: calculateDistance(userLat, userLon, alert.latitude, alert.longitude)
+    })).sort((a, b) => a.distance - b.distance); // Sort by distance
+
+    setNearbySOSAlerts(nearby);
+    return nearby;
   };
 
   return (
@@ -883,39 +1144,174 @@ const App = () => {
         )}
 
         {page === 'sos' && (
-          <div className="fixed left-6 top-24 w-96 max-h-[calc(100vh-120px)] overflow-y-auto space-y-4">
-            <div className="bg-red-500/40 backdrop-blur-2xl rounded-3xl p-6 border-2 border-red-400/50 shadow-2xl">
-              <h2 className="text-2xl font-bold mb-4 text-white">Emergency SOS</h2>
-              <div className="space-y-3">
-                <input
-                  type="text"
-                  value={sosLocation}
-                  onChange={(e) => setSosLocation(e.target.value)}
-                  placeholder="Current Location"
-                  className="w-full px-5 py-3 bg-white/90 rounded-2xl text-base"
-                />
-                <input
-                  type="number"
-                  value={peopleCount}
-                  onChange={(e) => setPeopleCount(e.target.value)}
-                  placeholder="People Count"
-                  className="w-full px-5 py-3 bg-white/90 rounded-2xl text-base"
-                />
-                <button onClick={handleSOS} className="w-full py-4 bg-gradient-to-r from-red-600 to-red-700 text-white text-lg font-bold rounded-2xl hover:from-red-700 hover:to-red-800 shadow-2xl">SEND SOS</button>
-              </div>
+          <div className="fixed left-6 top-24 w-96 max-h-[calc(100vh-120px)] overflow-y-auto scrollbar-hide space-y-3">
+            {/* SOS Send Card */}
+            <div className="bg-white/5 backdrop-blur-3xl rounded-[28px] p-6 border border-red-400/30 shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
+              <h2 className="text-xl font-semibold mb-4 text-white/95">Emergency SOS</h2>
+              
+              {!currentUserLocation ? (
+                <div className="space-y-3">
+                  <div className="bg-white/10 backdrop-blur-xl rounded-[18px] p-4 border border-white/20">
+                    <p className="text-white/90 text-sm mb-2">Location access required to send SOS alerts</p>
+                    <p className="text-white/70 text-xs">We need your location to help others find you in an emergency</p>
+                  </div>
+                  <button 
+                    onClick={requestLocationForSOS}
+                    className="w-full py-3.5 bg-white/15 backdrop-blur-2xl border border-white/30 text-white rounded-[18px] hover:bg-white/20 font-semibold transition-all"
+                  >
+                    Enable Location Access
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="bg-white/10 backdrop-blur-xl rounded-[18px] p-3 border border-white/20">
+                    <p className="text-white/90 text-xs">
+                      Location: {currentUserLocation.latitude.toFixed(4)}, {currentUserLocation.longitude.toFixed(4)}
+                    </p>
+                  </div>
+                  
+                  <input
+                    type="text"
+                    value={sosLocation}
+                    onChange={(e) => setSosLocation(e.target.value)}
+                    placeholder="Description (optional)"
+                    className="w-full px-4 py-3 bg-white/10 backdrop-blur-2xl border border-white/20 rounded-[18px] text-white placeholder-white/60 text-sm focus:outline-none focus:ring-2 focus:ring-red-400/50"
+                  />
+                  
+                  <input
+                    type="number"
+                    value={peopleCount}
+                    onChange={(e) => setPeopleCount(e.target.value)}
+                    placeholder="How many people need rescue?"
+                    min="1"
+                    className="w-full px-4 py-3 bg-white/10 backdrop-blur-2xl border border-white/20 rounded-[18px] text-white placeholder-white/60 text-sm focus:outline-none focus:ring-2 focus:ring-red-400/50"
+                  />
+                  
+                  <button 
+                    onClick={handleSOS}
+                    className="w-full py-4 bg-red-500/15 backdrop-blur-2xl border border-red-400/30 text-white text-lg font-bold rounded-[18px] hover:bg-red-500/25 shadow-[0_4px_16px_rgba(0,0,0,0.08)] transition-all"
+                  >
+                    SEND SOS ALERT
+                  </button>
+                </div>
+              )}
             </div>
 
-            <div className="bg-black/40 backdrop-blur-2xl rounded-3xl p-6 border border-white/20 shadow-2xl">
-              <h3 className="text-lg font-bold mb-3 text-white">Recent Alerts</h3>
-              <div className="space-y-2">
-                {sosAlerts.map((alert) => (
-                  <div key={alert.id} className="p-3 bg-red-500/20 rounded-xl border border-red-400/30">
-                    <p className="text-white text-sm font-semibold">Location: {alert.location}</p>
-                    <p className="text-xs text-white/70">People: {alert.peopleCount} | User: {alert.userId?.slice(0, 8)}</p>
-                  </div>
-                ))}
+            {/* Nearby SOS Alerts */}
+            <div className="bg-white/5 backdrop-blur-3xl rounded-[28px] p-6 border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-white/95">Nearby SOS Alerts</h3>
+                {currentUserLocation && (
+                  <button 
+                    onClick={() => filterNearbyAlerts(currentUserLocation.latitude, currentUserLocation.longitude, sosRadiusFilter)}
+                    className="text-xs text-white/70 hover:text-white/90 transition-all"
+                  >
+                    Refresh
+                  </button>
+                )}
               </div>
+              
+              {/* Radius Filter */}
+              {currentUserLocation && (
+                <div className="mb-4">
+                  <label className="text-white/70 text-xs mb-2 block">Search Radius</label>
+                  <select
+                    value={sosRadiusFilter}
+                    onChange={(e) => {
+                      const newRadius = parseInt(e.target.value);
+                      setSosRadiusFilter(newRadius);
+                      filterNearbyAlerts(currentUserLocation.latitude, currentUserLocation.longitude, newRadius);
+                    }}
+                    className="w-full px-4 py-2 bg-white/10 backdrop-blur-2xl border border-white/20 rounded-[18px] text-white text-sm focus:outline-none focus:ring-2 focus:ring-white/30"
+                  >
+                    <option value="5" className="bg-gray-800">5 km</option>
+                    <option value="10" className="bg-gray-800">10 km</option>
+                    <option value="20" className="bg-gray-800">20 km</option>
+                    <option value="50" className="bg-gray-800">50 km</option>
+                    <option value="100" className="bg-gray-800">100 km</option>
+                  </select>
+                </div>
+              )}
+              
+              {!currentUserLocation ? (
+                <div className="text-center py-8">
+                  <div className="text-white/60 text-sm mb-2">Enable location to see nearby alerts</div>
+                  <div className="text-white/40 text-xs">Within {sosRadiusFilter}km radius</div>
+                </div>
+              ) : nearbySOSAlerts.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="text-white/60 text-sm mb-2">No SOS alerts nearby</div>
+                  <div className="text-white/40 text-xs">Within {sosRadiusFilter}km radius</div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {nearbySOSAlerts.map((alert) => (
+                    <div key={alert.id} className="bg-red-500/15 backdrop-blur-xl rounded-[18px] p-4 border border-red-400/30">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex-1">
+                          <p className="text-white/95 text-sm font-semibold">
+                            {alert.location || 'Emergency Location'}
+                          </p>
+                          <p className="text-white/70 text-xs mt-1">
+                            {alert.peopleCount} {alert.peopleCount === 1 ? 'person' : 'people'} need rescue
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-red-400 text-xs font-semibold">
+                            {alert.distance.toFixed(1)} km away
+                          </p>
+                          <p className="text-white/50 text-xs mt-1">
+                            {new Date(alert.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      </div>
+                      {alert.latitude && alert.longitude && (
+                        <p className="text-white/50 text-xs mt-2">
+                          Coordinates: {alert.latitude.toFixed(4)}, {alert.longitude.toFixed(4)}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
+
+            {/* My SOS Alerts */}
+            {mySOSAlerts.length > 0 && (
+              <div className="bg-white/5 backdrop-blur-3xl rounded-[28px] p-6 border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
+                <h3 className="text-lg font-semibold text-white/95 mb-4">My SOS Alerts</h3>
+                <div className="space-y-2">
+                  {mySOSAlerts.map((alert) => (
+                    <div key={alert.id} className="bg-green-500/10 backdrop-blur-xl rounded-[18px] p-4 border border-green-400/30">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex-1">
+                          <p className="text-white/95 text-sm font-semibold">
+                            {alert.location || 'Emergency Location'}
+                          </p>
+                          <p className="text-white/70 text-xs mt-1">
+                            {alert.peopleCount} {alert.peopleCount === 1 ? 'person' : 'people'} need rescue
+                          </p>
+                          <p className="text-white/50 text-xs mt-1">
+                            Sent: {new Date(alert.timestamp).toLocaleString()}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleMarkAsSafe(alert.id)}
+                          className="px-3 py-1.5 bg-green-500/20 backdrop-blur-xl border border-green-400/40 text-white rounded-full text-xs font-semibold hover:bg-green-500/30 transition-all"
+                        >
+                          I'm Safe
+                        </button>
+                      </div>
+                      {alert.latitude && alert.longitude && (
+                        <p className="text-white/50 text-xs mt-2">
+                          Location: {alert.latitude.toFixed(4)}, {alert.longitude.toFixed(4)}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
