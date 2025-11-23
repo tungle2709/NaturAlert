@@ -15,8 +15,8 @@ import json
 import os
 
 # Import backend services
-from backend.services.prediction_engine import PredictionEngine
-from backend.services.gemini_service import get_gemini_service, GEMINI_AVAILABLE
+from services.prediction_engine import PredictionEngine
+from services.gemini_service import get_gemini_service, GEMINI_AVAILABLE
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -592,6 +592,155 @@ def get_disaster_detail(disaster_id: str):
 
 
 # ============================================================================
+# Location Search Endpoints
+# ============================================================================
+
+@app.get("/api/v1/location/search", tags=["Location"])
+def search_location(
+    query: str = Query(..., min_length=1, description="Location name to search"),
+    count: int = Query(10, ge=1, le=100, description="Maximum number of results")
+):
+    """
+    Search for locations using Open-Meteo Geocoding API.
+    
+    Returns location suggestions with coordinates, country, and admin areas.
+    """
+    try:
+        import requests
+        
+        # Call Open-Meteo Geocoding API
+        response = requests.get(
+            "https://geocoding-api.open-meteo.com/v1/search",
+            params={
+                "name": query,
+                "count": count,
+                "language": "en",
+                "format": "json"
+            },
+            timeout=10
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"Geocoding API error: {response.status_code}"
+            )
+        
+        data = response.json()
+        
+        # Format results
+        results = []
+        if "results" in data:
+            for location in data["results"]:
+                results.append({
+                    "id": location.get("id"),
+                    "name": location.get("name"),
+                    "latitude": location.get("latitude"),
+                    "longitude": location.get("longitude"),
+                    "country": location.get("country"),
+                    "country_code": location.get("country_code"),
+                    "admin1": location.get("admin1"),  # State/Province
+                    "admin2": location.get("admin2"),  # County/District
+                    "timezone": location.get("timezone"),
+                    "population": location.get("population"),
+                    "display_name": f"{location.get('name')}, {location.get('admin1', '')}, {location.get('country', '')}".replace(", ,", ",").strip(", ")
+                })
+        
+        return {
+            "results": results,
+            "count": len(results),
+            "query": query,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except requests.exceptions.Timeout:
+        raise HTTPException(
+            status_code=504,
+            detail="Location search timed out. Please try again."
+        )
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Location search service unavailable: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Location search failed: {str(e)}"
+        )
+
+
+@app.get("/api/v1/location/weather", tags=["Location"])
+def get_location_weather(
+    latitude: float = Query(..., ge=-90, le=90, description="Latitude"),
+    longitude: float = Query(..., ge=-180, le=180, description="Longitude")
+):
+    """
+    Get current weather data for a specific location using Open-Meteo Weather API.
+    
+    Returns real-time weather observations for the given coordinates.
+    """
+    try:
+        import requests
+        
+        # Call Open-Meteo Weather API
+        response = requests.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude": latitude,
+                "longitude": longitude,
+                "current": "temperature_2m,relative_humidity_2m,precipitation,surface_pressure,wind_speed_10m,wind_direction_10m",
+                "timezone": "auto"
+            },
+            timeout=10
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"Weather API error: {response.status_code}"
+            )
+        
+        data = response.json()
+        current = data.get("current", {})
+        
+        # Format weather data
+        weather_data = {
+            "latitude": latitude,
+            "longitude": longitude,
+            "temperature": current.get("temperature_2m"),
+            "humidity": current.get("relative_humidity_2m"),
+            "pressure": current.get("surface_pressure"),
+            "wind_speed": current.get("wind_speed_10m"),
+            "wind_direction": current.get("wind_direction_10m"),
+            "precipitation": current.get("precipitation"),
+            "timestamp": current.get("time"),
+            "timezone": data.get("timezone")
+        }
+        
+        return {
+            "weather": weather_data,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except requests.exceptions.Timeout:
+        raise HTTPException(
+            status_code=504,
+            detail="Weather data request timed out. Please try again."
+        )
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Weather service unavailable: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch weather data: {str(e)}"
+        )
+
+
+# ============================================================================
 # Map and Visualization Endpoints
 # ============================================================================
 
@@ -724,17 +873,32 @@ def get_map_markers(
 
 if __name__ == "__main__":
     import uvicorn
+    import sys
+    
+    # Try port 5000, fallback to 8000 if occupied
+    port = 5000
+    try:
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        result = sock.connect_ex(('localhost', port))
+        sock.close()
+        if result == 0:
+            port = 8000
+            print(f"⚠️  Port 5000 is in use, using port {port} instead")
+    except:
+        pass
+    
     print("\n" + "="*60)
     print("🌊 Disaster Early Warning System API")
     print("="*60)
-    print(f"📍 Server: http://localhost:5000")
-    print(f"📚 API Docs: http://localhost:5000/docs")
-    print(f"🔍 Health: http://localhost:5000/health")
+    print(f"📍 Server: http://localhost:{port}")
+    print(f"📚 API Docs: http://localhost:{port}/docs")
+    print(f"🔍 Health: http://localhost:{port}/health")
     print("="*60 + "\n")
     
     uvicorn.run(
         app,
         host="0.0.0.0",
-        port=5000,
+        port=port,
         log_level="info"
     )

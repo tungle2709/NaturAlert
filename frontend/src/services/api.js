@@ -5,7 +5,7 @@
  * Base URL: http://localhost:5000
  */
 
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = 'http://localhost:8000';
 
 /**
  * Generic fetch wrapper with error handling
@@ -177,6 +177,98 @@ export async function getMapMarkers(markerType = 'all', limit = 100) {
 }
 
 // ============================================================================
+// Location Search API (Direct Open-Meteo API calls)
+// ============================================================================
+
+/**
+ * Search for locations using Open-Meteo Geocoding API (direct call)
+ * @param {string} query - Location name to search
+ * @param {number} count - Maximum number of results (default: 10)
+ * @returns {Promise<Object>} Location search results
+ */
+export async function searchLocation(query, count = 10) {
+  try {
+    const response = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=${count}&language=en&format=json`
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Geocoding API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    // Format results to match our expected structure
+    const results = [];
+    if (data.results) {
+      data.results.forEach(location => {
+        results.push({
+          id: location.id,
+          name: location.name,
+          latitude: location.latitude,
+          longitude: location.longitude,
+          country: location.country,
+          country_code: location.country_code,
+          admin1: location.admin1,
+          admin2: location.admin2,
+          timezone: location.timezone,
+          population: location.population,
+          display_name: `${location.name}${location.admin1 ? ', ' + location.admin1 : ''}${location.country ? ', ' + location.country : ''}`
+        });
+      });
+    }
+    
+    return {
+      results: results,
+      count: results.length,
+      query: query
+    };
+  } catch (error) {
+    console.error('Location search error:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get current weather data for specific coordinates using Open-Meteo Weather API (direct call)
+ * @param {number} latitude - Latitude coordinate
+ * @param {number} longitude - Longitude coordinate
+ * @returns {Promise<Object>} Weather data
+ */
+export async function getLocationWeather(latitude, longitude) {
+  try {
+    const response = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,precipitation,surface_pressure,wind_speed_10m,wind_direction_10m&timezone=auto`
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Weather API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    const current = data.current || {};
+    
+    return {
+      weather: {
+        latitude: latitude,
+        longitude: longitude,
+        temperature: current.temperature_2m,
+        humidity: current.relative_humidity_2m,
+        pressure: current.surface_pressure,
+        wind_speed: current.wind_speed_10m,
+        wind_direction: current.wind_direction_10m,
+        precipitation: current.precipitation,
+        timestamp: current.time,
+        timezone: data.timezone
+      }
+    };
+  } catch (error) {
+    console.error('Weather fetch error:', error);
+    throw error;
+  }
+}
+
+// ============================================================================
 // Health Check
 // ============================================================================
 
@@ -217,6 +309,10 @@ export default {
   // Map & Visualization
   getHeatmapData,
   getMapMarkers,
+  
+  // Location Search
+  searchLocation,
+  getLocationWeather,
   
   // Health
   checkHealth,

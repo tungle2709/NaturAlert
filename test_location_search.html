@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Location Search Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        .result {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 5px 0;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        .result:hover {
+            background-color: #f0f0f0;
+        }
+        .weather {
+            background-color: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🌍 Location Search Test</h1>
+    <input type="text" id="searchInput" placeholder="Search for a city (e.g., London, Tokyo, New York)">
+    <div id="results"></div>
+    <div id="weather"></div>
+
+    <script>
+        let searchTimeout;
+
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            const query = e.target.value;
+            
+            if (query.length < 2) {
+                document.getElementById('results').innerHTML = '';
+                return;
+            }
+
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => searchLocation(query), 300);
+        });
+
+        async function searchLocation(query) {
+            try {
+                const response = await fetch(
+                    `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=10&language=en&format=json`
+                );
+                const data = await response.json();
+                
+                const resultsDiv = document.getElementById('results');
+                resultsDiv.innerHTML = '';
+                
+                if (data.results && data.results.length > 0) {
+                    data.results.forEach(location => {
+                        const displayName = `${location.name}${location.admin1 ? ', ' + location.admin1 : ''}${location.country ? ', ' + location.country : ''}`;
+                        const div = document.createElement('div');
+                        div.className = 'result';
+                        div.innerHTML = `
+                            <strong>${location.name}</strong><br>
+                            <small>${displayName}</small><br>
+                            <small>Lat: ${location.latitude.toFixed(4)}, Lng: ${location.longitude.toFixed(4)}</small>
+                            ${location.population ? `<br><small>Population: ${location.population.toLocaleString()}</small>` : ''}
+                        `;
+                        div.onclick = () => getWeather(location, displayName);
+                        resultsDiv.appendChild(div);
+                    });
+                } else {
+                    resultsDiv.innerHTML = '<p>No results found</p>';
+                }
+            } catch (error) {
+                console.error('Search error:', error);
+                document.getElementById('results').innerHTML = '<p style="color: red;">Error searching locations</p>';
+            }
+        }
+
+        async function getWeather(location, displayName) {
+            try {
+                const response = await fetch(
+                    `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&current=temperature_2m,relative_humidity_2m,precipitation,surface_pressure,wind_speed_10m,wind_direction_10m&timezone=auto`
+                );
+                const data = await response.json();
+                const current = data.current || {};
+                
+                const weatherDiv = document.getElementById('weather');
+                weatherDiv.innerHTML = `
+                    <h3>📍 ${displayName}</h3>
+                    <p><strong>Temperature:</strong> ${current.temperature_2m}°C</p>
+                    <p><strong>Humidity:</strong> ${current.relative_humidity_2m}%</p>
+                    <p><strong>Pressure:</strong> ${current.surface_pressure} hPa</p>
+                    <p><strong>Wind Speed:</strong> ${current.wind_speed_10m} km/h</p>
+                    <p><strong>Wind Direction:</strong> ${current.wind_direction_10m}°</p>
+                    <p><strong>Precipitation:</strong> ${current.precipitation} mm</p>
+                    <p><small>Updated: ${current.time}</small></p>
+                    <p><small>Timezone: ${data.timezone}</small></p>
+                `;
+            } catch (error) {
+                console.error('Weather error:', error);
+                document.getElementById('weather').innerHTML = '<p style="color: red;">Error fetching weather data</p>';
+            }
+        }
+    </script>
+</body>
+</html>

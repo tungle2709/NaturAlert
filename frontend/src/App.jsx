@@ -25,8 +25,13 @@ const App = () => {
   const [chatMessage, setChatMessage] = useState('');
   const [chatHistory, setChatHistory] = useState([]);
   const [conversationId, setConversationId] = useState(null);
+  const [locationSearch, setLocationSearch] = useState('');
+  const [locationResults, setLocationResults] = useState([]);
+  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState(null);
   const globeEl = useRef();
   const globeInstance = useRef();
+  const searchTimeoutRef = useRef(null);
 
   // Initialize Firebase
   useEffect(() => {
@@ -66,9 +71,10 @@ const App = () => {
         .pointOfView({ altitude: 2.5 })
         .pointsData([])
         .pointAltitude(0.01)
-        .pointRadius(0.5)
-        .pointColor(() => '#ff0000')
-        .pointLabel('name');
+        .pointRadius(1.2)
+        .pointColor('color')
+        .pointLabel('name')
+        .pointsMerge(false);
     }
   }, []);
 
@@ -98,6 +104,74 @@ const App = () => {
       showMessage('⚠️ Failed to fetch risk data: ' + err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle location search with debouncing
+  const handleLocationSearch = async (searchQuery) => {
+    setLocationSearch(searchQuery);
+    
+    if (searchQuery.length < 2) {
+      setLocationResults([]);
+      setShowLocationDropdown(false);
+      return;
+    }
+    
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    // Debounce search
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const results = await api.searchLocation(searchQuery, 10);
+        setLocationResults(results.results || []);
+        setShowLocationDropdown(true);
+      } catch (err) {
+        console.error('Location search failed:', err);
+        setLocationResults([]);
+      }
+    }, 300);
+  };
+
+  const handleSelectLocation = async (locationData) => {
+    setSelectedLocation(locationData);
+    setLocationSearch(locationData.display_name);
+    setShowLocationDropdown(false);
+    
+    // Move globe to selected location
+    if (globeInstance.current) {
+      // Animate globe to the selected location
+      globeInstance.current.pointOfView({
+        lat: locationData.latitude,
+        lng: locationData.longitude,
+        altitude: 1.5
+      }, 1000); // 1000ms animation duration
+      
+      // Add a marker at the selected location
+      globeInstance.current.pointsData([{
+        lat: locationData.latitude,
+        lng: locationData.longitude,
+        name: locationData.display_name,
+        size: 0.5,
+        color: '#ff0000'
+      }]);
+    }
+    
+    // Fetch weather data for the selected location
+    try {
+      const weatherData = await api.getLocationWeather(locationData.latitude, locationData.longitude);
+      showMessage(`✅ Selected: ${locationData.display_name}`);
+      
+      // Update location ID with coordinates for backend
+      const locationId = `${locationData.latitude},${locationData.longitude}`;
+      setLocation(locationId);
+      
+      // Optionally fetch risk data immediately
+      // await fetchRiskData(locationId);
+    } catch (err) {
+      showMessage('⚠️ Failed to fetch weather data: ' + err.message);
     }
   };
 
@@ -227,16 +301,49 @@ const App = () => {
             <div className="bg-black/40 backdrop-blur-2xl rounded-3xl p-6 border border-white/20 shadow-2xl">
               <h2 className="text-2xl font-bold mb-4 text-white">🌍 Search Location</h2>
               <div className="space-y-3">
-                <input
-                  type="text"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  placeholder="Location ID (e.g., default)"
-                  className="w-full px-5 py-3 bg-white/90 backdrop-blur-md border-0 rounded-2xl text-base focus:ring-2 focus:ring-blue-400"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={locationSearch}
+                    onChange={(e) => handleLocationSearch(e.target.value)}
+                    onFocus={() => locationResults.length > 0 && setShowLocationDropdown(true)}
+                    placeholder="Search city, country... (e.g., London, Tokyo)"
+                    className="w-full px-5 py-3 bg-white/90 backdrop-blur-md border-0 rounded-2xl text-base focus:ring-2 focus:ring-blue-400"
+                  />
+                  
+                  {showLocationDropdown && locationResults.length > 0 && (
+                    <div className="absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-2xl max-h-64 overflow-y-auto">
+                      {locationResults.map((loc, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => handleSelectLocation(loc)}
+                          className="w-full text-left px-4 py-3 hover:bg-blue-50 border-b border-gray-100 last:border-b-0 transition"
+                        >
+                          <div className="font-semibold text-gray-800">{loc.name}</div>
+                          <div className="text-xs text-gray-500">
+                            {loc.admin1 && `${loc.admin1}, `}{loc.country}
+                            {loc.population && ` • Pop: ${loc.population.toLocaleString()}`}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                {selectedLocation && (
+                  <div className="bg-blue-500/20 rounded-xl p-3 border border-blue-400/30">
+                    <div className="text-white text-sm">
+                      <div className="font-semibold">📍 {selectedLocation.name}</div>
+                      <div className="text-xs text-white/70 mt-1">
+                        Lat: {selectedLocation.latitude.toFixed(4)}, Lng: {selectedLocation.longitude.toFixed(4)}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
                 <button 
                   onClick={handlePredict} 
-                  disabled={loading}
+                  disabled={loading || !location}
                   className="w-full py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-2xl hover:from-blue-600 hover:to-purple-700 font-semibold shadow-lg disabled:opacity-50"
                 >
                   {loading ? 'Loading...' : 'Get Risk Assessment'}
