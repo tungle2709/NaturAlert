@@ -10,40 +10,6 @@ Natural disasters claim thousands of lives and cause billions in damage every ye
 
 NaturAlert is built on the principle that life-saving technology should be accessible to everyone. We use open-source tools, public datasets, and transparent methodologies to ensure our work can be replicated, improved, and adapted by communities worldwide.
 
-**Our Data Science Approach:**
-
-- **Ethical AI**: Our models are trained on diverse, representative datasets to avoid bias and ensure equitable protection for all communities
-- **Transparency**: We document our methodologies, share our code, and explain our predictions so users can trust and understand our system
-- **Continuous Learning**: Our models improve over time by learning from new data, user feedback, and emerging climate patterns
-- **Collaborative Science**: We welcome contributions from data scientists, climate researchers, and domain experts to improve prediction accuracy
-
-**Impact Through Technology:**
-
-- Analyzing millions of weather data points daily to identify emerging threats
-- Processing historical disaster records spanning decades to understand patterns
-- Leveraging AI to make complex climate science accessible to non-experts
-- Providing free, global coverage so no community is left behind
-
-## What Makes It Special
-
-**Intelligent Risk Assessment**  
-Our machine learning models analyze multiple weather parameters against historical disaster patterns to calculate precise risk scores. You don't just get weather data—you get context, predictions, and actionable insights.
-
-**Global Coverage, Local Precision**  
-Search any location on Earth and get instant risk analysis. From major cities to remote villages, NaturAlert provides comprehensive disaster risk assessment wherever you need it.
-
-**Interactive 3D Visualization**  
-Explore weather patterns and risk zones on a stunning 3D globe. Watch storms develop, track weather systems, and understand global climate patterns at a glance.
-
-**AI-Powered Guidance**  
-Chat with our Google Gemini-powered assistant to understand complex weather phenomena, get personalized safety recommendations, and learn about disaster preparedness.
-
-**Emergency SOS System**  
-When disaster strikes, every second counts. Our SOS alert system lets you broadcast your location and status to emergency responders and loved ones instantly.
-
-**Historical Context**  
-Learn from the past to prepare for the future. Compare current conditions with historical disaster data to understand patterns and make informed decisions.
-
 ## Built With Modern Technology
 
 **Backend Infrastructure**  
@@ -99,19 +65,6 @@ The app will open at http://localhost:5173
 
 Open your browser and start exploring. No complex configuration required.
 
-## How to Use NaturAlert
-
-**Check Disaster Risk for Any Location**  
-Type any city, address, or coordinates into the search box. Click "Get Risk Assessment" and within seconds you'll see a comprehensive risk score, current weather conditions, and an AI-generated explanation of potential threats. The system analyzes temperature, precipitation, wind speed, humidity, and pressure against historical disaster patterns to give you accurate predictions.
-
-**Explore the Interactive Globe**  
-Spin the 3D globe to explore weather patterns worldwide. Click on any region to see real-time conditions and risk levels. Watch weather systems move, identify high-risk zones, and understand global climate patterns visually.
-
-**Get AI-Powered Insights**  
-Open the AI Chat and ask anything: "What should I do if a hurricane is approaching?" or "Is it safe to travel to Miami next week?" Our Gemini-powered assistant provides personalized advice, explains complex weather phenomena, and helps you prepare for potential disasters.
-
-**Use the SOS System in Emergencies**  
-When disaster strikes, navigate to the SOS page and enable location access. Create an emergency alert that broadcasts your location and status. View nearby alerts to help others or coordinate with emergency responders.
 
 ## API Reference
 
@@ -140,7 +93,6 @@ The codebase is organized for clarity and maintainability:
 │   ├── src/               # Components, services, and utilities
 │   └── public/            # Static assets and resources
 ├── models/                # Trained machine learning models
-├── .kiro/specs/          # Technical specifications and documentation
 └── requirements.txt      # Python package dependencies
 ```
 
@@ -154,29 +106,6 @@ We welcome contributions that make disaster prediction more accurate and accessi
 4. Submit a pull request with a clear description of your improvements
 
 Whether you're fixing bugs, adding features, or improving documentation, your contributions help make the world safer.
-
-## License
-
-NaturAlert is open source software licensed under the MIT License. See the LICENSE file for complete terms. You're free to use, modify, and distribute this software, even for commercial purposes.
-
-## Need Help?
-
-Encountered a bug? Have a feature request? Want to discuss disaster prediction algorithms? Open an issue on GitHub and we'll respond as quickly as possible. For urgent matters related to emergency situations, please contact local authorities first.
-
-## Acknowledgments
-
-NaturAlert stands on the shoulders of giants. We're grateful to:
-
-- Open-Meteo and OpenWeather for providing reliable, accessible weather data
-- Google Gemini for powering our AI assistant with cutting-edge language models
-- The Globe.gl team for making beautiful 3D visualizations possible
-- The open source community for the incredible tools and libraries that make this project possible
-
-## The Mission
-
-Every year, natural disasters affect millions of people worldwide. Many of these tragedies could be prevented or mitigated with better early warning systems. NaturAlert exists to democratize access to sophisticated disaster prediction technology, making it available to everyone, everywhere, for free.
-
-When you use NaturAlert, you're not just checking the weather—you're part of a global effort to save lives through technology.
 
 ---
 
